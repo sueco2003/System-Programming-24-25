@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <assert.h>
 
-
 void display_game_state() {
     initscr();
     noecho();
@@ -21,19 +20,24 @@ void display_game_state() {
     zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
 
     char board[BOARD_SIZE][BOARD_SIZE];
+    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE +2, 1, 1); // Create a new window for the board with a border
+
     while (1) {
+        werase(board_win);
+        box(board_win, 0, 0); // Draw a border around the board window
+
         zmq_recv(subscriber, board, sizeof(board), 0);
 
-        clear();
         for (int i = 0; i < BOARD_SIZE; i++) {
             for (int j = 0; j < BOARD_SIZE; j++) {
-                mvaddch(i, j, board[i][j]);
+                mvwaddch(board_win, i + 1, j + 1, board[i][j]); // Adjust position for border within the window
             }
         }
-        refresh();
+        wrefresh(board_win);
         usleep(100000);
     }
 
+    delwin(board_win);
     zmq_close(subscriber);
     zmq_ctx_destroy(context);
     endwin();
