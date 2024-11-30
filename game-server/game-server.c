@@ -25,61 +25,45 @@ char board[BOARD_SIZE][BOARD_SIZE];
 int astronaut_count = 0;
 int alien_count = MAX_ALIENS;
 
-void render_board() {
+void render_board()
+{
     clear();
 
-    // Top labels for columns
-    mvprintw(0, 2, "12345678901234567890"); // Adjust for BOARD_SIZE
-    mvprintw(0, BOARD_SIZE + 6, "SCORE");
+    WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);               // Window for line numbers
+    WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);             // Window for column numbers
+    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 2); // Window for the board with a border
+    WINDOW *score_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 25);
+    
 
-    // Draw the frame for the game board (horizontal and vertical)
-    for (int i = 1; i <= BOARD_SIZE + 2; i++) {
-        mvaddch(i, 2, 't');                          // Left frame
-        mvaddch(i, BOARD_SIZE + 2, '|');             // Right frame
+    for (int i = 0; i < BOARD_SIZE; i++)
+    {
+        mvwprintw(line_win, i, 0, "%d", i % 10);
+        mvwprintw(column_win, 0, i, "%d", i % 10);
     }
-    for (int j = 1; j <= BOARD_SIZE; j++) {
-        mvaddch(1, j, '-');                          // Top frame
-        mvaddch(BOARD_SIZE + 2, j, '-');             // Bottom frame
-    }
-    mvaddch(1, BOARD_SIZE + 1, '-');                // Top-right corner
-    mvaddch(BOARD_SIZE + 1, 0, '-');                // Bottom-left corner
-    mvaddch(BOARD_SIZE + 1, BOARD_SIZE + 1, '-');   // Bottom-right corner
+    mvwprintw(score_win, 1, 3, "%s", "SCORE");
 
-    // Draw the frame for the scoreboard (horizontal and vertical)
-    for (int i = 1; i <= BOARD_SIZE + 1; i++) {
-        mvaddch(i, BOARD_SIZE + 5, '|');            // Left frame
-        mvaddch(i, BOARD_SIZE + 20, '|');           // Right frame
-    }
-    for (int j = BOARD_SIZE + 6; j <= BOARD_SIZE + 19; j++) {
-        mvaddch(1, j, '-');                         // Top frame
-        mvaddch(BOARD_SIZE + 1, j, '-');            // Bottom frame
-    }
-    mvaddch(1, BOARD_SIZE + 5, '-');                // Top-left corner
-    mvaddch(1, BOARD_SIZE + 20, '-');               // Top-right corner
-    mvaddch(BOARD_SIZE + 1, BOARD_SIZE + 5, '-');   // Bottom-left corner
-    mvaddch(BOARD_SIZE + 1, BOARD_SIZE + 20, '-');  // Bottom-right corner
+    box(board_win, 0, 0);
+    box(score_win, 0, 0);
+    wrefresh(column_win);
+    wrefresh(line_win);
+    wrefresh(score_win);
 
-    // Add row numbers to the left of the board
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        mvprintw(i + 2, 0, "%d", i % 10);
-    }
-
-    // Draw the game board contents (astronauts and aliens)
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        for (int j = 0; j < BOARD_SIZE; j++) {
-            if ((i < 2 || i > 17) || (j < 2 || j > 17)) { // Avoid the corners and alien area
-                mvaddch(i + 2, j + 1, board[i][j]);
-            }
+    // Print the board
+    for (int i = 0; i < BOARD_SIZE; i++)
+    {
+        for (int j = 0; j < BOARD_SIZE; j++)
+        {
+            mvwaddch(board_win, i + 1, j + 1, board[i][j]); // Adjust position for border within the window
         }
     }
+    wrefresh(board_win);
 
-    // Display astronaut scores inside the scoreboard frame
-    int y_offset = BOARD_SIZE + 7;
-    for (int i = 0; i < astronaut_count; i++) {
-        mvprintw(2 + i, y_offset, "%c - %d", astronauts[i].id, astronauts[i].score);
+    for (int i = 0; i < astronaut_count; i++)
+    {
+        mvwprintw(score_win, 2 + i, 3, "%c - %d", astronauts[i].id, astronauts[i].score);
     }
+    wrefresh(score_win);
 
-    refresh();
 }
 
 void init_game_state()
@@ -94,8 +78,10 @@ void init_game_state()
     }
 }
 
-void update_aliens() {
-    for (int i = 0; i < alien_count; i++) {
+void update_aliens()
+{
+    for (int i = 0; i < alien_count; i++)
+    {
         // Random movement within the range of 2 to 17
         int dx = (rand() % 3) - 1; // Random -1, 0, or 1 for X movement
         int dy = (rand() % 3) - 1; // Random -1, 0, or 1 for Y movement
@@ -105,14 +91,16 @@ void update_aliens() {
         aliens[i].y = (aliens[i].y + dy + BOARD_SIZE) % BOARD_SIZE;
 
         // Ensure aliens are within the restricted area (2–17)
-        if (aliens[i].x < 2) aliens[i].x = 2;
-        if (aliens[i].x > 17) aliens[i].x = 17;
-        if (aliens[i].y < 2) aliens[i].y = 2;
-        if (aliens[i].y > 17) aliens[i].y = 17;
+        if (aliens[i].x < 2)
+            aliens[i].x = 2;
+        if (aliens[i].x > 17)
+            aliens[i].x = 17;
+        if (aliens[i].y < 2)
+            aliens[i].y = 2;
+        if (aliens[i].y > 17)
+            aliens[i].y = 17;
     }
 }
-
-
 
 void remove_alien(int index)
 {
@@ -140,17 +128,21 @@ void broadcast_game_state(void *publisher)
     zmq_send(publisher, serialized_board, strlen(serialized_board), 0);
 }
 
-void update_board() {
+void update_board()
+{
     memset(board, ' ', sizeof(board));
 
     // Add remaining aliens
-    for (int i = 0; i < alien_count; i++) {
+    for (int i = 0; i < alien_count; i++)
+    {
         board[aliens[i].x][aliens[i].y] = '*';
     }
 
     // Add astronauts
-    for (int i = 0; i < astronaut_count; i++) {
-        if (astronauts[i].stunned <= 0) {
+    for (int i = 0; i < astronaut_count; i++)
+    {
+        if (astronauts[i].stunned <= 0)
+        {
             board[astronauts[i].x][astronauts[i].y] = astronauts[i].id;
         }
     }
@@ -166,8 +158,8 @@ void process_message(void *socket, char *message)
             return;
         }
 
-        int x = rand() % 16 + 18;  // Ensure astronauts spawn outside alien space
-        int y = rand() % 16 + 18;  // Ensure astronauts spawn outside alien space
+        int x = rand() % 16 + 18; // Ensure astronauts spawn outside alien space
+        int y = rand() % 16 + 18; // Ensure astronauts spawn outside alien space
 
         // Add new astronaut
         char id = 'A' + astronaut_count;
@@ -262,17 +254,13 @@ void process_message(void *socket, char *message)
 
 void game_loop(void *socket, void *publisher)
 {
-    printf("ei\n");
     initscr();       // Initialize ncurses
     noecho();        // Don't echo input
     curs_set(FALSE); // Hide cursor
-    printf("ei\n");
     init_game_state();
-    printf("ei\n");
     char message[256];
     while (1)
     {
-        printf("ei\n");
         zmq_recv(socket, message, sizeof(message), 0);
         mvprintw(1, 0, "recebeste algo? %s\n", message);
         process_message(socket, message);
@@ -287,9 +275,10 @@ void game_loop(void *socket, void *publisher)
     endwin(); // End ncurses
 }
 
-int main() {
+int main()
+{
     void *context = zmq_ctx_new();
-    void *socket = zmq_socket(context, ZMQ_REP);  // Using REP socket type
+    void *socket = zmq_socket(context, ZMQ_REP); // Using REP socket type
     zmq_bind(socket, SERVER_ADDRESS);
     printf("ei\n");
     void *publisher = zmq_socket(context, ZMQ_PUB);
