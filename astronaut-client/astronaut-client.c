@@ -76,5 +76,7 @@ void run_client() {
 
 int main() {
     run_client();  // Run the client application
+    printf("Client finished\n");
     return 0;
+
 }
