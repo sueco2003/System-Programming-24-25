@@ -52,7 +52,7 @@ void run_client()
         }
         else if (ch == KEY_RIGHT)
         {
-            sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "RIGHT");
+            sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "RIGHT") ;
         }
         else if (ch == ' ')
         {

@@ -48,7 +48,7 @@ void display_game_state()
         if (zmq_recv(subscriber, board, sizeof(board), 0) == -1)
         {
             mvprintw(0, 0, "Error receiving board data.");
-            refresh();
+            refresh() ;
             break;
         }
 
