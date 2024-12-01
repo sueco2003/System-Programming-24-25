@@ -8,7 +8,8 @@
 #include <stdio.h>
 #include <assert.h>
 
-void run_client() {
+void run_client()
+{
     // Initialize ncurses for user input/output
     initscr();
     keypad(stdscr, TRUE);
@@ -21,35 +22,49 @@ void run_client() {
 
     // Connect to the server
     zmq_send(socket, MSG_CONNECT, strlen(MSG_CONNECT), 0);
-    
+
     // Receive response from the server and extract astronaut ID
-    char response[27];
+    char response[64];
     int bytes_received = zmq_recv(socket, response, sizeof(response), 0);
     response[bytes_received] = '\0';
-    mvprintw(0, 0, "Server: %s", response);  // Display the response
-    char astronaut_id = response[24];  // Extract the astronaut ID (e.g., "Connected X")
+    mvprintw(0, 0, "%s", response);   // Display the response
+    char astronaut_id = response[24]; // Extract the astronaut ID (e.g., "Connected X")
     refresh();
 
-    while (1) {
+    while (1)
+    {
 
         int ch = getch();
-    
+
         // Prepare the movement message based on key press
         char message[32];
-        if (ch == KEY_UP) {
+        if (ch == KEY_UP)
+        {
             sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "UP");
-        } else if (ch == KEY_DOWN) {
+        }
+        else if (ch == KEY_DOWN)
+        {
             sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "DOWN");
-        } else if (ch == KEY_LEFT) {
+        }
+        else if (ch == KEY_LEFT)
+        {
             sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "LEFT");
-        } else if (ch == KEY_RIGHT) {
+        }
+        else if (ch == KEY_RIGHT)
+        {
             sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "RIGHT");
-        } else if (ch == ' ') {
+        }
+        else if (ch == ' ')
+        {
             sprintf(message, "%s %c", MSG_ZAP, astronaut_id);
-        } else if (ch == 'q' || ch == 'Q') {
+        }
+        else if (ch == 'q' || ch == 'Q')
+        {
             sprintf(message, "%s %c", MSG_DISCONNECT, astronaut_id);
             break;
-        } else {
+        }
+        else
+        {
             continue; // Skip unrecognized keys
         }
 
@@ -58,24 +73,25 @@ void run_client() {
         zmq_recv(socket, response, sizeof(response), 0);
 
         // Display server's response on the screen
+        mvprintw(1, 0, "%*s", (int)sizeof(response), "                                                               "); // Converte para int
+
+        refresh();
         mvprintw(1, 0, "%s", response);
         refresh();
     }
 
-    
     // Clean up and close ZeroMQ socket and context
     zmq_close(socket);
     zmq_ctx_destroy(context);
-    
+
     // End ncurses mode
     endwin();
 }
 
-int main() {
-    run_client();  // Run the client application
+int main()
+{
+    run_client(); // Run the client application
     printf("Client finished\n");
 
     return 0;
-
-
 }

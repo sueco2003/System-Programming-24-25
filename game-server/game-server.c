@@ -93,7 +93,7 @@ void init_game_state()
     for (int i = 0; i < MAX_ALIENS; i++)
     {
         aliens[i].x = rand() % 16 + 2; // Range 2–17
-        aliens[i].y = rand() % 16 + 2; // Range 2–17
+        aliens[i].y = rand() % 16 + 2 ; // Range 2–17
     }
 }
 
@@ -132,9 +132,12 @@ void remove_alien(int index)
 
 void broadcast_game_state(void *publisher)
 {
-    char serialized_board[BOARD_SIZE * BOARD_SIZE + 1];
+    char serialized_board[BOARD_SIZE * BOARD_SIZE + 1] = {0}; // Initialize to empty
+    char scoring[MAX_PLAYERS * 4] = {0};                     // Initialize to empty
+    char player_score[8];                                   // Allow enough space for larger scores
     int index = 0;
 
+    // Serialize the board into a single string
     for (int i = 0; i < BOARD_SIZE; i++)
     {
         for (int j = 0; j < BOARD_SIZE; j++)
@@ -142,10 +145,19 @@ void broadcast_game_state(void *publisher)
             serialized_board[index++] = board[i][j];
         }
     }
-    serialized_board[index] = '\0';
+    serialized_board[index] = '\0'; // Null-terminate the board string
 
+    // Serialize the player scores
+    for (int i = 0; i < astronaut_count; i++) {
+        snprintf(player_score, sizeof(player_score), "%d\n", astronauts[i].score);
+        strncat(scoring, player_score, sizeof(scoring) - strlen(scoring) - 1); // Safe concatenation
+    }
+
+    // Send the serialized board and scores over the publisher socket
     zmq_send(publisher, serialized_board, strlen(serialized_board), 0);
+    zmq_send(publisher, scoring, strlen(scoring), 0);
 }
+
 
 void update_board()
 {
@@ -297,9 +309,7 @@ void process_message(void *socket, char *message)
                                     remove_alien(k); // Remove alien
                                     break;
                                 }
-                            }
-                            board[x][j] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the alien
+                            }                    
                         }
                         else if (isalnum(board[x][j])) // Astronaut hit
                         {
@@ -312,8 +322,6 @@ void process_message(void *socket, char *message)
                                     break;                            // Stun the astronaut and continue shooting
                                 }
                             }
-                            board[x][j] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the astronaut
                         }
                         else
                         {
@@ -337,8 +345,6 @@ void process_message(void *socket, char *message)
                                     break;
                                 }
                             }
-                            board[x][j] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the alien
                         }
                         else if (isalnum(board[x][j])) // Astronaut hit
                         {
@@ -351,8 +357,6 @@ void process_message(void *socket, char *message)
                                     break;                            // Stun the astronaut and continue shooting
                                 }
                             }
-                            board[x][j] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the astronaut
                         }
                         else
                         {
@@ -376,8 +380,6 @@ void process_message(void *socket, char *message)
                                     break;
                                 }
                             }
-                            board[j][y] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the alien
                         }
                         else if (isalnum(board[j][y])) // Astronaut hit
                         {
@@ -389,8 +391,6 @@ void process_message(void *socket, char *message)
                                     break;                            // Stun the astronaut and continue shooting
                                 }
                             }
-                            board[j][y] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the astronaut
                         }
                         else
                         {
@@ -414,8 +414,6 @@ void process_message(void *socket, char *message)
                                     break;
                                 }
                             }
-                            board[j][y] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the alien
                         }
                         else if (isalnum(board[j][y])) // Astronaut hit
                         {
@@ -427,8 +425,6 @@ void process_message(void *socket, char *message)
                                     break;                            // Stun the astronaut and continue shooting
                                 }
                             }
-                            board[j][y] = ' '; // Clear the shot path
-                            break;             // Stop the shot after hitting the astronaut
                         }
                         else
                         {
@@ -436,9 +432,7 @@ void process_message(void *socket, char *message)
                         }
                     }
                 }
-
                 render_board(); // Render the board after the shot is marked
-
                 usleep(500000); // Show the shot for 500ms
 
                 // Clear the shot path after 500ms
@@ -446,13 +440,9 @@ void process_message(void *socket, char *message)
                 {
                     for (int j = y + 1; j < BOARD_SIZE; j++)
                     {
-                        if (board[x][j] == '-')
+                        if (board[x][j] == '-' && board[x][j] == '*')
                         {
                             board[x][j] = ' '; // Clear the shot path (horizontal)
-                        }
-                        else
-                        {
-                            break; // Stop when hitting an obstacle
                         }
                     }
                 }
@@ -460,13 +450,9 @@ void process_message(void *socket, char *message)
                 {
                     for (int j = x + 1; j < BOARD_SIZE; j++)
                     {
-                        if (board[j][y] == '|')
+                        if (board[j][y] == '|' && board[j][y] == '*')
                         {
                             board[j][y] = ' '; // Clear the shot path (vertical)
-                        }
-                        else
-                        {
-                            break; // Stop when hitting an obstacle
                         }
                     }
                 }
@@ -474,13 +460,9 @@ void process_message(void *socket, char *message)
                 {
                     for (int j = y - 1; j >= 0; j--)
                     {
-                        if (board[x][j] == '-')
+                        if (board[x][j] == '-' && board[x][j] == '*')
                         {
                             board[x][j] = ' '; // Clear the shot path (horizontal)
-                        }
-                        else
-                        {
-                            break; // Stop when hitting an obstacle
                         }
                     }
                 }
@@ -488,13 +470,9 @@ void process_message(void *socket, char *message)
                 {
                     for (int j = x - 1; j >= 0; j--)
                     {
-                        if (board[j][y] == '|')
+                        if (board[j][y] == '|' && board[j][y] == '*')
                         {
                             board[j][y] = ' '; // Clear the shot path (vertical)
-                        }
-                        else
-                        {
-                            break; // Stop when hitting an obstacle
                         }
                     }
                 }
