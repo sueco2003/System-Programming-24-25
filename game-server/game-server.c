@@ -10,10 +10,13 @@
 #include <ctype.h>
 #include "common.h"
 #include <signal.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h> /* Definition of AT_* constants */
+#include <sys/stat.h>
 
-#define BOARD_SIZE 20
-#define MAX_ALIENS 1
-#define MAX_PLAYERS 8
+#define FIFO_PARENT_TO_CHILD "/tmp/game_fifo_ptc"
+#define FIFO_CHILD_TO_PARENT "/tmp/game_fifo_ctp"
 
 // Structs for astronaut and alien
 typedef struct
@@ -388,59 +391,183 @@ void process_message(void *socket, char *message, GameState *gameState)
     }
 }
 
-int main()
+void create_fifo(const char *fifo_path)
 {
-    // Setup shared memory with mmap
-    GameState *gameState = mmap(NULL, sizeof(GameState), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-    if (gameState == MAP_FAILED)
+    // Remove FIFO se já existir
+    if (access(fifo_path, F_OK) == 0)
     {
-        perror("mmap failed");
-        exit(1);
+        if (unlink(fifo_path) == -1)
+        {
+            perror("Failed to remove existing FIFO");
+            exit(EXIT_FAILURE);
+        }
     }
 
+    // Cria o FIFO
+    if (mkfifo(fifo_path, 0666) == -1)
+    {
+        perror("Failed to create FIFO");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void set_nonblocking(int fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+    {
+        perror("fcntl GETFL");
+        exit(EXIT_FAILURE);
+    }
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    {
+        perror("fcntl SETFL");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int main()
+{
     signal(SIGINT, handle_signal); // Handle Ctrl+C gracefully
 
-    void *context = zmq_ctx_new();
-    void *socket = zmq_socket(context, ZMQ_REP); // Using REP socket type
-    zmq_bind(socket, SERVER_ADDRESS);
-    void *publisher = zmq_socket(context, ZMQ_PUB);
-    zmq_bind(publisher, PUBLISHER_ADDRESS);
+    unlink(FIFO_PARENT_TO_CHILD);
+    unlink(FIFO_CHILD_TO_PARENT);
 
-    init_game_state(gameState); // Initialize the game state
+    // Create FIFOs
+    create_fifo(FIFO_PARENT_TO_CHILD);
+    create_fifo(FIFO_CHILD_TO_PARENT);
+
+    void *context = zmq_ctx_new();
+    if (!context)
+    {
+        perror("Failed to create ZMQ context");
+        unlink(FIFO_PARENT_TO_CHILD);
+        unlink(FIFO_CHILD_TO_PARENT);
+        exit(EXIT_FAILURE);
+    }
+
+    void *socket = zmq_socket(context, ZMQ_REP); // Using REP socket type
+    if (!socket || zmq_bind(socket, SERVER_ADDRESS) != 0)
+    {
+        perror("Failed to bind ZMQ socket");
+        zmq_ctx_destroy(context);
+        unlink(FIFO_PARENT_TO_CHILD);
+        unlink(FIFO_CHILD_TO_PARENT);
+        exit(EXIT_FAILURE);
+    }
+
+    void *publisher = zmq_socket(context, ZMQ_PUB);
+    if (!publisher || zmq_bind(publisher, PUBLISHER_ADDRESS) != 0)
+    {
+        perror("Failed to bind ZMQ publisher");
+        zmq_close(socket);
+        zmq_ctx_destroy(context);
+        unlink(FIFO_PARENT_TO_CHILD);
+        unlink(FIFO_CHILD_TO_PARENT);
+        exit(EXIT_FAILURE);
+    }
+
+    GameState gameState;
+    init_game_state(&gameState); // Initialize the game state
 
     pid_t pid = fork();
     if (pid < 0)
     {
         perror("Fork failed");
-        exit(1);
+        zmq_close(socket);
+        zmq_close(publisher);
+        zmq_ctx_destroy(context);
+        unlink(FIFO_PARENT_TO_CHILD);
+        unlink(FIFO_CHILD_TO_PARENT);
+        exit(EXIT_FAILURE);
     }
 
     if (pid == 0)
     {
-        // Child process: Handles alien updates
+        // Child process
+        int ptc_fd = open(FIFO_PARENT_TO_CHILD, O_RDONLY | O_NONBLOCK); // Open FIFO in non-blocking mode
+        int ctp_fd = open(FIFO_CHILD_TO_PARENT, O_WRONLY);              // Write FIFO can block if no reader is ready
+        if (ptc_fd == -1 || ctp_fd == -1)
+        {
+            perror("Failed to open FIFOs in child process");
+            exit(EXIT_FAILURE);
+        }
+
+        set_nonblocking(ptc_fd); // Set parent-to-child FIFO to non-blocking
+        struct timespec lastUpdateTime;
+        clock_gettime(CLOCK_MONOTONIC, &lastUpdateTime); // Get the current time
         while (1)
         {
-            update_aliens(gameState);                   // Update alien positions
-            update_board(gameState);                    // Update the game board
-            broadcast_game_state(publisher, gameState); // Broadcast the updated state
-            render_board(gameState);
-            usleep(1000000); // Wait 1 second
+            // Attempt to read from FIFO (non-blocking)
+            read(ptc_fd, &gameState, sizeof(GameState));
+
+            // Check if 1 second has passed
+            struct timespec currentTime;
+            clock_gettime(CLOCK_MONOTONIC, &currentTime);
+
+            // Calculate elapsed time
+            double elapsedTime = (currentTime.tv_sec - lastUpdateTime.tv_sec) +
+                                 (currentTime.tv_nsec - lastUpdateTime.tv_nsec) / 1e9;
+
+            // If 1 second has passed, do the periodic updates
+            if (elapsedTime >= 1.0)
+            {
+                // Perform game state updates every second
+                update_aliens(&gameState);                    // Update alien positions
+                update_board(&gameState);                     // Update the game board
+                broadcast_game_state(publisher, &gameState);  // Broadcast the updated state
+                render_board(&gameState);                     // Render the game board
+                write(ctp_fd, &gameState, sizeof(GameState)); // Send updated state to parent
+
+                // Update the last update time
+                lastUpdateTime = currentTime;
+            }
         }
+        close(ptc_fd);
+        close(ctp_fd);
+        exit(EXIT_SUCCESS);
     }
     else
     {
+        // Parent process
+        int ptc_fd = open(FIFO_PARENT_TO_CHILD, O_WRONLY);              // Open FIFO for writing
+        int ctp_fd = open(FIFO_CHILD_TO_PARENT, O_RDONLY | O_NONBLOCK); // Open FIFO in non-blocking mode
+        if (ptc_fd == -1 || ctp_fd == -1)
+        {
+            perror("Failed to open FIFOs in parent process");
+            kill(pid, SIGKILL); // Ensure child process is killed
+            exit(EXIT_FAILURE);
+        }
+
+        set_nonblocking(ctp_fd); // Set parent-to-child FIFO to non-blocking
         char message[32];
         while (1)
         {
-            zmq_recv(socket, message, sizeof(message), 0);
-            process_message(socket, message, gameState); // Handle player messages
-            update_board(gameState);
-            render_board(gameState); // Update the display
+            ssize_t bytesRead = read(ctp_fd, &gameState, sizeof(GameState));
+            if (bytesRead > 0)
+            {
+                render_board(&gameState); // Update the display
+            }
+
+            // Non-blocking ZeroMQ receive
+            if (zmq_recv(socket, message, sizeof(message), ZMQ_NOBLOCK) > 0)
+            {
+                process_message(socket, message, &gameState); // Handle player messages
+                update_board(&gameState);                     // Update the game board
+                write(ptc_fd, &gameState, sizeof(GameState)); // Send updated state to child
+                render_board(&gameState);                     // Update the display
+            }
         }
+        close(ptc_fd);
+        close(ctp_fd);
     }
 
+    // Cleanup
     zmq_close(socket);
     zmq_close(publisher);
     zmq_ctx_destroy(context);
-    return 0;
+    unlink(FIFO_PARENT_TO_CHILD);
+    unlink(FIFO_CHILD_TO_PARENT);
+
+    return EXIT_SUCCESS;
 }

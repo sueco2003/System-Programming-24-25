@@ -6,7 +6,7 @@
 
 #define BOARD_SIZE 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 1 // 1/3 of the board
+#define MAX_ALIENS 40 // 1/3 of the board
 
 // Message types
 #define MSG_CONNECT "Astronaut_connect"
