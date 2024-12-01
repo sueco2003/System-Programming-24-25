@@ -21,35 +21,34 @@ void run_client() {
 
     // Connect to the server
     zmq_send(socket, MSG_CONNECT, strlen(MSG_CONNECT), 0);
-    printf("mandei %s\n", MSG_CONNECT);
     
     // Receive response from the server and extract astronaut ID
-    char response[16];
-    zmq_recv(socket, response, sizeof(response), 0);
-    printf("Received: %s\n", response);  // Debugging
-    mvprintw(1, 0, "Server: %s", response);  // Display the response
-    char astronaut_id = response[10];  // Extract the astronaut ID (e.g., "Connected X")
-
-    mvprintw(0, 0, "You are astronaut %c", astronaut_id);  // Display astronaut ID
+    char response[27];
+    int bytes_received = zmq_recv(socket, response, sizeof(response), 0);
+    response[bytes_received] = '\0';
+    mvprintw(0, 0, "Server: %s", response);  // Display the response
+    char astronaut_id = response[24];  // Extract the astronaut ID (e.g., "Connected X")
     refresh();
 
     while (1) {
-        int ch = getch();
-        
-        if (ch == 'q' || ch == 'Q') break;  // Exit on 'q' or 'Q'
 
+        int ch = getch();
+    
         // Prepare the movement message based on key press
-        char message[16];
+        char message[32];
         if (ch == KEY_UP) {
-            strcpy(message, "MOVE UP");
+            sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "UP");
         } else if (ch == KEY_DOWN) {
-            strcpy(message, "MOVE DOWN");
+            sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "DOWN");
         } else if (ch == KEY_LEFT) {
-            strcpy(message, "MOVE LEFT");
+            sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "LEFT");
         } else if (ch == KEY_RIGHT) {
-            strcpy(message, "MOVE RIGHT");
+            sprintf(message, "%s %c %s", MSG_MOVE, astronaut_id, "RIGHT");
         } else if (ch == ' ') {
-            strcpy(message, "ZAP");
+            sprintf(message, "%s %c", MSG_ZAP, astronaut_id);
+        } else if (ch == 'q' || ch == 'Q') {
+            sprintf(message, "%s %c", MSG_DISCONNECT, astronaut_id);
+            break;
         } else {
             continue; // Skip unrecognized keys
         }
@@ -59,12 +58,10 @@ void run_client() {
         zmq_recv(socket, response, sizeof(response), 0);
 
         // Display server's response on the screen
-        mvprintw(1, 0, "Server: %s", response);
+        mvprintw(1, 0, "%s", response);
         refresh();
     }
 
-    // Send disconnect message to server before closing
-    zmq_send(socket, MSG_DISCONNECT, strlen(MSG_DISCONNECT), 0);
     
     // Clean up and close ZeroMQ socket and context
     zmq_close(socket);
@@ -77,7 +74,7 @@ void run_client() {
 int main() {
     run_client();  // Run the client application
     printf("Client finished\n");
-    printf("Client finished\n");
+
     return 0;
 
 
