@@ -88,20 +88,15 @@ void render_board(GameState *gameState)
     WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);               // Window for line numbers
     WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);             // Window for column numbers
     WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 2); // Window for the board with a border
-    WINDOW *score_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 25);
 
     for (int i = 0; i < BOARD_SIZE; i++)
     {
         mvwprintw(line_win, i, 0, "%d", i % 10);
         mvwprintw(column_win, 0, i, "%d", i % 10);
     }
-    mvwprintw(score_win, 1, 3, "%s", "SCORE");
-
     box(board_win, 0, 0);
-    box(score_win, 0, 0);
     wrefresh(column_win);
     wrefresh(line_win);
-    wrefresh(score_win);
 
     // Print the board
     for (int i = 0; i < BOARD_SIZE; i++)
@@ -112,6 +107,20 @@ void render_board(GameState *gameState)
         }
     }
     wrefresh(board_win);
+}
+
+void render_score(GameState *gameState)
+{
+
+    initscr();
+    noecho();
+    clear();
+
+    WINDOW *score_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 25);
+
+    mvwprintw(score_win, 1, 3, "%s", "SCORE");
+
+    box(score_win, 0, 0);
 
     for (int i = 0; i < gameState->astronaut_count; i++)
     {
@@ -227,7 +236,7 @@ void process_message(void *socket, char *message, GameState *gameState)
         {
             if (gameState->astronauts[i].id == id)
             {
-                for (int j = i; j < gameState->astronaut_count - 1; j++)
+                for (int j = i; j <= gameState->astronaut_count - 1; j++)
                 {
                     gameState->astronauts[j] = gameState->astronauts[j + 1];
                 }
@@ -469,7 +478,8 @@ int main()
 
     GameState gameState;
     init_game_state(&gameState); // Initialize the game state
-
+    render_board(&gameState);
+    render_score(&gameState);
     pid_t pid = fork();
     if (pid < 0)
     {
@@ -500,6 +510,10 @@ int main()
         {
             // Attempt to read from FIFO (non-blocking)
             read(ptc_fd, &gameState, sizeof(GameState));
+
+            if (!gameState.alien_count) {
+                break;
+            }
 
             // Check if 1 second has passed
             struct timespec currentTime;
@@ -556,12 +570,25 @@ int main()
                 update_board(&gameState);                     // Update the game board
                 write(ptc_fd, &gameState, sizeof(GameState)); // Send updated state to child
                 render_board(&gameState);                     // Update the display
+                render_score(&gameState);
+                if (!gameState.alien_count)
+                {
+                    mvprintw(0, 0, "Game Over!");
+                    mvprintw(1, 0, "Scores:");
+                    for (int i = 0; i < gameState.astronaut_count; ++i)
+                    {
+                        mvprintw(2 + i, 0, "Player %c: %d", gameState.astronauts[i].id, gameState.astronauts[i].score);
+                        
+                    }
+                    refresh();
+                    usleep(5000000);
+                    break;
+                }
             }
         }
         close(ptc_fd);
         close(ctp_fd);
     }
-
     // Cleanup
     zmq_close(socket);
     zmq_close(publisher);

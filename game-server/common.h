@@ -1,12 +1,12 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5557" // VER ESTES IPS O QUE E PARA POR AQUI
+#define SERVER_ADDRESS "tcp://127.0.0.1:5555" // VER ESTES IPS O QUE E PARA POR AQUI
 #define PUBLISHER_ADDRESS "tcp://127.0.0.1:5558"
 
 #define BOARD_SIZE 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 40 // 1/3 of the board
+#define MAX_ALIENS 5 // 1/3 of the board
 
 // Message types
 #define MSG_CONNECT "Astronaut_connect"

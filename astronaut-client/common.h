@@ -1,7 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5557"
+#define SERVER_ADDRESS "tcp://127.0.0.1:5555"
 #define PUBLISHER_ADDRESS "tcp://127.0.0.1:5558"
 
 #define BOARD_SIZE 20

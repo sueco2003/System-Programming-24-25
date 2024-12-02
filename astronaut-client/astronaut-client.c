@@ -27,7 +27,8 @@ void run_client()
     char response[64];
     int bytes_received = zmq_recv(socket, response, sizeof(response), 0);
     response[bytes_received] = '\0';
-    mvprintw(0, 0, "%s", response);   // Display the response
+    mvprintw(1, 0, "%s", response);   // Display the response
+    mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");   // Display the response
     char astronaut_id = response[24]; // Extract the astronaut ID (e.g., "Connected X")
     refresh();
 
@@ -61,7 +62,6 @@ void run_client()
         else if (ch == 'q' || ch == 'Q')
         {
             sprintf(message, "%s %c", MSG_DISCONNECT, astronaut_id);
-            break;
         }
         else
         {
@@ -70,20 +70,23 @@ void run_client()
 
         // Send the message to the server and wait for a response
         zmq_send(socket, message, strlen(message), 0);
-        zmq_recv(socket, response, sizeof(response), 0);
-
-        // Display server's response on the screen
-        mvprintw(1, 0, "%*s", (int)sizeof(response), "                                                               "); // Converte para int
-
+        int bytes_received = zmq_recv(socket, response, sizeof(response), 0);
+        response[bytes_received] = '\0';
+        move(3, 0);          // move to begining of line
+        clrtoeol(); 
+        mvprintw(3, 0, "%s", response);
         refresh();
-        mvprintw(1, 0, "%s", response);
-        refresh();
+        if (!strcmp(response, "Disconnected"))  {  
+            mvprintw(5, 0, "Thanks for playing! See you soon!");
+            refresh(); 
+            break;
+        }
     }
 
     // Clean up and close ZeroMQ socket and context
     zmq_close(socket);
     zmq_ctx_destroy(context);
-
+    usleep(3000000);
     // End ncurses mode
     endwin();
 }

@@ -16,14 +16,21 @@ void display_game_state()
     // Initialize ZMQ context and subscriber
     void *context = zmq_ctx_new();
     void *subscriber = zmq_socket(context, ZMQ_SUB);
-    zmq_connect(subscriber, PUBLISHER_ADDRESS);
+    
+
+    int rc = zmq_connect(subscriber, PUBLISHER_ADDRESS);
+    if (rc != 0)
+    {
+        mvprintw(0, 0, "Failed to connect to publisher.");
+        refresh();
+        return;
+    }
+
     zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
 
     // Game board and score buffers
-    char board[BOARD_SIZE][BOARD_SIZE];
+    char board[BOARD_SIZE * BOARD_SIZE + 1];
     char scoring[MAX_PLAYERS * 4];
-
-    
 
     WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);               // Window for line numbers
     WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);             // Window for column numbers
@@ -42,13 +49,14 @@ void display_game_state()
     wrefresh(column_win);
     wrefresh(line_win);
     wrefresh(score_win);
+    wrefresh(board_win);
     while (1)
     {
         // Receive the game board state
         if (zmq_recv(subscriber, board, sizeof(board), 0) == -1)
         {
             mvprintw(0, 0, "Error receiving board data.");
-            refresh() ;
+            refresh();
             break;
         }
 
@@ -60,12 +68,13 @@ void display_game_state()
             break;
         }
 
+        int index = 0;
         // Print the game board
         for (int i = 0; i < BOARD_SIZE; i++)
         {
             for (int j = 0; j < BOARD_SIZE; j++)
             {
-                mvwaddch(board_win, i + 1, j + 1, board[i][j]); // Adjust for border
+                mvwaddch(board_win, i + 1, j + 1, board[index++]); // Adjust for border
             }
         }
         wrefresh(board_win);
@@ -80,8 +89,6 @@ void display_game_state()
             i++;
         }
         wrefresh(score_win);
-
-        usleep(100000); // Delay to reduce CPU usage
     }
 
     // Cleanup
