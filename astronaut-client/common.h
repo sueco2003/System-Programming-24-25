@@ -1,8 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5555"
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5558"
+#define SERVER_ADDRESS "tcp://127.0.0.1:5540"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5541"
 
 #define BOARD_SIZE 20
 #define MAX_PLAYERS 8
