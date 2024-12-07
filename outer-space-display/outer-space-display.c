@@ -1,10 +1,12 @@
-#include <ncurses.h>
-#include <zmq.h>
-#include "common.h"
-#include <string.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <curses.h>  // for delwin, mvwprintw, newwin, wrefresh, WINDOW, box
+#include <time.h>    // for time_t
+#include <zmq.h>     // for zmq_recv, zmq_close, zmq_connect, zmq_ctx_destroy
+
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5541"
+
+#define BOARD_SIZE 20
+#define MAX_PLAYERS 8
+#define MAX_ALIENS 166 // 1/3 of the board
 
 // Structs for astronaut and alien
 typedef struct
@@ -32,6 +34,17 @@ typedef struct
 } GameState;
 
 
+
+/**
+ * Displays the current game state in a terminal window using ncurses.
+ * 
+ * Initializes a ZeroMQ context and subscribes to a publisher to receive
+ * game state updates. Sets up ncurses windows to display line numbers,
+ * column numbers, the game board, and player scores. Continuously receives
+ * game state updates and refreshes the display accordingly.
+ * 
+ * Cleans up ncurses windows and ZeroMQ resources upon termination.
+ */
 void display_game_state()
 {
 

@@ -1,13 +1,27 @@
-#include <ncurses.h>
-#include <zmq.h>
-#include <stdlib.h>
-#include "common.h"
-#include <string.h>
-#include <unistd.h>
-#include <zmq.h>
-#include <stdio.h>
-#include <assert.h>
+#include <curses.h>  // for mvprintw, refresh, clrtoeol, endwin, initscr
+#include <stdio.h>   // for sprintf, printf
+#include <string.h>  // for strlen, strcmp
+#include <unistd.h>  // for sleep
+#include <zmq.h>     // for zmq_recv, zmq_send, zmq_close, zmq_connect, zmq_...
 
+
+// Message types
+#define MSG_CONNECT "Astronaut_connect"
+#define MSG_DISCONNECT "Astronaut_disconnect"
+#define MSG_MOVE "Astronaut_movement"
+#define MSG_ZAP "Astronaut_zap"
+
+#define SERVER_ADDRESS "tcp://127.0.0.1:5540"
+
+
+/**
+ * Runs the client application, handling user input and server communication.
+ *
+ * This function initializes the ncurses library for user input and output,
+ * sets up a ZeroMQ context and socket to communicate with the server, and
+ * processes user commands to send movement or action messages. It displays
+ * server responses and handles disconnection gracefully.
+ */
 void run_client() {
     // Initialize ncurses for user input/output
     initscr();
@@ -73,6 +87,15 @@ void run_client() {
     zmq_ctx_destroy(context);
 }
 
+/**
+ * Entry point for the client application.
+ *
+ * This function initializes and runs the client application
+ * by calling the `run_client` function. After execution,
+ * it prints a message indicating the client has finished.
+ *
+ * @return Returns 0 upon successful completion.
+ */
 int main()
 {
     run_client(); // Run the client application

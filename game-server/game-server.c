@@ -1,24 +1,29 @@
-#include <ncurses.h>
-#include <zmq.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <assert.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <time.h>
-#include <ctype.h>
-#include "common.h"
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h> /* Definition of AT_* constants */
-#include <sys/stat.h>
+#include <assert.h>  // for assert
+#include <ctype.h>   // for isalnum
+#include <curses.h>  // for mvwprintw, newwin, wrefresh, mvprintw, WINDOW
+#include <stdio.h>   // for sprintf, perror
+#include <stdlib.h>  // for rand, exit, EXIT_FAILURE, EXIT_SUCCESS
+#include <string.h>  // for strlen, strncmp, memset
+#include <time.h>    // for time, time_t
+#include <unistd.h>  // for sleep, NULL, fork, usleep, pid_t
+#include <zmq.h>     // for zmq_send, zmq_close, zmq_ctx_destroy, zmq_socket
 
+#define SERVER_ADDRESS "tcp://127.0.0.1:5540"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5541"
+
+#define BOARD_SIZE 20
+#define MAX_PLAYERS 8
+#define MAX_ALIENS 166  // 1/3 of the board
+
+// Message types
+#define MSG_CONNECT "Astronaut_connect"
+#define MSG_DISCONNECT "Astronaut_disconnect"
+#define MSG_MOVE "Astronaut_movement"
+#define MSG_ZAP "Astronaut_zap"
+#define KEEP_ALIVE "Update aliens!"
 
 // Structs for astronaut and alien
-typedef struct
-{
+typedef struct {
     char id;
     int x, y;
     int score;
@@ -26,14 +31,12 @@ typedef struct
     time_t last_shot_time;
 } Astronaut;
 
-typedef struct
-{
+typedef struct {
     int x, y;
 } Alien;
 
 // Shared game state
-typedef struct
-{
+typedef struct {
     Astronaut astronauts[MAX_PLAYERS];
     Alien aliens[MAX_ALIENS];
     char board[BOARD_SIZE][BOARD_SIZE];
@@ -47,24 +50,53 @@ int Y_MIN[] = {0, 1, 18, 19, 2, 2, 2, 2};
 int X_MAX[] = {17, 17, 17, 17, 0, 1, 18, 19};
 int X_MIN[] = {2, 2, 2, 2, 0, 1, 18, 19};
 
+// Array para verificar quais IDs estão em uso (de 'A' a 'H')
+int astronaut_ids_in_use[MAX_PLAYERS] = {0};  // 0: disponível, 1: em uso
+
+/**
+ * Updates the game board in the GameState structure.
+ *
+ * This function clears the current game board and then populates it with
+ * the positions of aliens and astronauts. Aliens are represented by '*'
+ * and astronauts by their respective IDs. The board is updated based on
+ * the current positions stored in the GameState.
+ *
+ * @param gameState Pointer to the GameState structure containing the
+ *                  current positions of aliens and astronauts.
+ */
 void update_board(GameState *gameState) {
     memset(gameState->board, ' ', sizeof(gameState->board));
 
     // Add remaining aliens
-    for (int i = 0; i < gameState->alien_count; i++) gameState->board[gameState->aliens[i].x][gameState->aliens[i].y] = '*';
+    for (int i = 0; i < gameState->alien_count; i++)
+        gameState->board[gameState->aliens[i].x][gameState->aliens[i].y] = '*';
 
     // Add astronauts
-    for (int i = 0; i < gameState->astronaut_count; i++) gameState->board[gameState->astronauts[i].x][gameState->astronauts[i].y] = gameState->astronauts[i].id;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+        if (astronaut_ids_in_use[i]) gameState->board[gameState->astronauts[i].x][gameState->astronauts[i].y] = gameState->astronauts[i].id;
 }
+
+/**
+ * Renders the game board on the screen using ncurses windows.
+ *
+ * This function initializes the ncurses screen, creates separate windows for
+ * displaying line numbers, column numbers, and the game board itself, and
+ * then populates these windows with the appropriate data from the provided
+ * GameState structure. The board is displayed with a border, and the line
+ * and column numbers are displayed along the edges of the board.
+ *
+ * @param gameState Pointer to the GameState structure containing the current
+ *                  state of the game, including the board to be rendered.
+ */
 
 void render_board(GameState *gameState) {
     initscr();
     noecho();
     clear();
 
-    WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);               // Window for line numbers
-    WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);             // Window for column numbers
-    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 2); // Window for the board with a border
+    WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);                // Window for line numbers
+    WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);              // Window for column numbers
+    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 2);  // Window for the board with a border
 
     for (int i = 0; i < BOARD_SIZE; i++) {
         mvwprintw(line_win, i, 0, "%d", i % 10);
@@ -78,15 +110,26 @@ void render_board(GameState *gameState) {
     // Print the board
     for (int i = 0; i < BOARD_SIZE; i++) {
         for (int j = 0; j < BOARD_SIZE; j++) {
-            mvwaddch(board_win, i + 1, j + 1, gameState->board[i][j]); // Adjust position for border within the window
+            mvwaddch(board_win, i + 1, j + 1, gameState->board[i][j]);  // Adjust position for border within the window
         }
     }
 
     wrefresh(board_win);
 }
 
+/**
+ * Renders the scores of astronauts on the screen using ncurses.
+ *
+ * This function initializes the ncurses screen, creates a window for
+ * displaying the scores, and populates it with each astronaut's ID
+ * and score from the provided GameState structure. The scores are
+ * displayed in a bordered window, and the screen is refreshed to
+ * show the updated scores.
+ *
+ * @param gameState Pointer to the GameState structure containing the
+ *                  current scores and IDs of the astronauts.
+ */
 void render_score(GameState *gameState) {
-
     initscr();
     noecho();
     clear();
@@ -97,10 +140,26 @@ void render_score(GameState *gameState) {
 
     box(score_win, 0, 0);
 
-    for (int i = 0; i < gameState->astronaut_count; i++) mvwprintw(score_win, 2 + i, 3, "%c - %d", gameState->astronauts[i].id, gameState->astronauts[i].score);
+    int j = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (astronaut_ids_in_use[i]) {
+            mvwprintw(score_win, 2 + j, 3, "%c - %d", gameState->astronauts[i].id, gameState->astronauts[i].score);
+            j++;
+        }
+    }
     wrefresh(score_win);
 }
 
+/**
+ * Initializes the game state for a new game session.
+ *
+ * This function sets up the initial state of the game by clearing the game
+ * board, setting the astronaut count to zero, and initializing the aliens
+ * with random positions within the board boundaries. The alien count is set
+ * to the maximum allowed number of aliens.
+ *
+ * @param gameState Pointer to the GameState structure to be initialized.
+ */
 void init_game_state(GameState *gameState) {
     memset(gameState->board, ' ', sizeof(gameState->board));
     gameState->astronaut_count = 0;
@@ -108,119 +167,178 @@ void init_game_state(GameState *gameState) {
 
     // Initialize aliens
     for (int i = 0; i < MAX_ALIENS; i++) {
-        gameState->aliens[i].x = rand() % (BOARD_SIZE - 4) + 2; // Random X position (avoiding borders)
-        gameState->aliens[i].y = rand() % (BOARD_SIZE - 4) + 2; // Random Y position (avoiding borders)
+        gameState->aliens[i].x = rand() % (BOARD_SIZE - 4) + 2;  // Random X position (avoiding borders)
+        gameState->aliens[i].y = rand() % (BOARD_SIZE - 4) + 2;  // Random Y position (avoiding borders)
     }
+    for (int i = 0; i < MAX_PLAYERS; i++) gameState->astronauts[i] = (Astronaut){0};
 }
 
+/**
+ * Removes an alien from the GameState's alien array at the specified index.
+ *
+ * This function shifts all aliens in the array one position to the left
+ * starting from the given index, effectively removing the alien at that
+ * index. It then decrements the alien count in the GameState.
+ *
+ * @param index The index of the alien to be removed.
+ * @param gameState Pointer to the GameState structure from which the alien
+ *                  is to be removed.
+ */
 void remove_alien(int index, GameState *gameState) {
-    for (int i = index; i < gameState->alien_count - 1; i++) gameState->aliens[i] = gameState->aliens[i + 1];
+    for (int i = index; i < gameState->alien_count - 1; i++)
+        gameState->aliens[i] = gameState->aliens[i + 1];
     gameState->alien_count--;
 }
 
+/**
+ * Updates the positions of all aliens in the GameState.
+ *
+ * This function iterates over each alien in the GameState and adjusts
+ * their positions randomly within a specified range. The movement is
+ * constrained to ensure aliens remain within the defined area on the
+ * board, specifically between coordinates 2 and 17.
+ *
+ * @param gameState Pointer to the GameState structure containing the
+ *                  current positions and count of aliens.
+ */
 
 void update_aliens(GameState *gameState) {
     for (int i = 0; i < gameState->alien_count; i++) {
         // Random movement within the range of 2 to 17
-        int dx = (rand() % 3) - 1; // Random -1, 0, or 1 for X movement
-        int dy = (rand() % 3) - 1; // Random -1, 0, or 1 for Y movement
+        int dx = (rand() % 3) - 1;  // Random -1, 0, or 1 for X movement
+        int dy = (rand() % 3) - 1;  // Random -1, 0, or 1 for Y movement
 
         // Update alien position while keeping it within the range 2–17
         gameState->aliens[i].x = (gameState->aliens[i].x + dx + BOARD_SIZE) % BOARD_SIZE;
         gameState->aliens[i].y = (gameState->aliens[i].y + dy + BOARD_SIZE) % BOARD_SIZE;
 
         // Ensure aliens are within the restricted area (2–17)
-        if (gameState->aliens[i].x < 2) gameState->aliens[i].x = 2;
-        if (gameState->aliens[i].x > 17) gameState->aliens[i].x = 17;
-        if (gameState->aliens[i].y < 2) gameState->aliens[i].y = 2;
-        if (gameState->aliens[i].y > 17) gameState->aliens[i].y = 17;
+        if (gameState->aliens[i].x < 2)
+            gameState->aliens[i].x = 2;
+        if (gameState->aliens[i].x > 17)
+            gameState->aliens[i].x = 17;
+        if (gameState->aliens[i].y < 2)
+            gameState->aliens[i].y = 2;
+        if (gameState->aliens[i].y > 17)
+            gameState->aliens[i].y = 17;
     }
 }
 
-void process_message(void *socket, char *message, GameState *gameState) {
+/**
+ * Processes incoming messages and updates the game state accordingly.
+ *
+ * This function handles various types of messages received from players,
+ * including connection requests, disconnection requests, movement commands,
+ * and shooting actions. It updates the GameState structure based on the
+ * message type, manages player positions, scores, and interactions with
+ * aliens. The function also sends appropriate responses back to the client
+ * through the provided ZeroMQ socket.
+ *
+ * @param socket Pointer to the ZeroMQ socket for sending responses.
+ * @param message The message received from a player.
+ * @param gameState Pointer to the GameState structure to be updated.
+ */
+void process_message(void *socket, char *message, GameState *gameState, void *publisher) {
     if (strncmp(message, MSG_CONNECT, strlen(MSG_CONNECT)) == 0) {
+        char id = '\0';
+        int index;
         if (gameState->astronaut_count >= MAX_PLAYERS) {
             zmq_send(socket, "Sorry, the game is full", 23, 0);
             return;
         }
 
-        // Randomly choose coordinates for the new astronaut
-        int x = X_MIN[gameState->astronaut_count] + (rand() % (X_MAX[gameState->astronaut_count] - X_MIN[gameState->astronaut_count] + 1));
-        int y = Y_MIN[gameState->astronaut_count] + (rand() % (Y_MAX[gameState->astronaut_count] - Y_MIN[gameState->astronaut_count] + 1));
+        for (char player = 'A'; player <= 'H'; player++) {
+            index = player - 'A';  // Calcular o índice de 0 a 7
+            if (astronaut_ids_in_use[index] == 0) {
+                astronaut_ids_in_use[index] = 1;  // Marcar como em uso
+                id = player;
+                break;
+            }
+        }
 
-        // Add new astronaut to the game state
-        char id = 'A' + gameState->astronaut_count;
-        gameState->astronauts[gameState->astronaut_count] = (Astronaut){id, x, y, 0, 0, 0};
+        // Randomly choose coordinates for the new astronaut
+        int x = X_MIN[index] + (rand() % (X_MAX[index] - X_MIN[index] + 1));
+        int y = Y_MIN[index] + (rand() % (Y_MAX[index] - Y_MIN[index] + 1));
+
+        gameState->astronauts[index] = (Astronaut){id, x, y, 0, 0, 0};
         gameState->astronaut_count++;
 
         // Send confirmation response
         char response[27];
         sprintf(response, "Welcome! You are player %c.", id);
-        zmq_send(socket, response, strlen(response), 0); // Send the message
-    }
-    else if (strncmp(message, MSG_DISCONNECT, strlen(MSG_DISCONNECT)) == 0) {
+        zmq_send(socket, response, strlen(response), 0);  // Send the message
+    } else if (strncmp(message, MSG_DISCONNECT, strlen(MSG_DISCONNECT)) == 0) {
+        int found = 0;  // Track if the astronaut is found
         char id = message[strlen(MSG_DISCONNECT) + 1];
-        int found = 0;
-        for (int i = 0; i < gameState->astronaut_count; i++) {
-            if (gameState->astronauts[i].id == id) {
-                for (int j = i; j <= gameState->astronaut_count - 1; j++) gameState->astronauts[j] = gameState->astronauts[j + 1];
-                gameState->astronaut_count--;
-                found = 1;
-                break;
-            }
+        int index_to_remove = id - 'A';  // Index corresponds to 'A' to 'H'
+
+        if (index_to_remove >= 0 && index_to_remove < MAX_PLAYERS && astronaut_ids_in_use[index_to_remove] == 1) {
+            found = 1;  // Mark as found
+
+            // Remove astronaut by resetting their values
+            gameState->astronauts[index_to_remove] = (Astronaut){0};  // Reset astronaut's state
+            astronaut_ids_in_use[index_to_remove] = 0;                // Mark ID as available
+            gameState->astronaut_count--;                             // Decrease astronaut count
         }
+
+        // Send appropriate response
         zmq_send(socket, found ? "Disconnected" : "Astronaut not found", 20, 0);
-    }
-    else if (strncmp(message, KEEP_ALIVE, strlen(KEEP_ALIVE)) == 0) {
+    } else if (strncmp(message, KEEP_ALIVE, strlen(KEEP_ALIVE)) == 0) {
         update_aliens(gameState);
         zmq_send(socket, "HI!", 3, 0);
-    }
-    else if (strncmp(message, MSG_MOVE, strlen(MSG_MOVE)) == 0) {
+    } else if (strncmp(message, MSG_MOVE, strlen(MSG_MOVE)) == 0) {
         char id = message[strlen(MSG_MOVE) + 1];
-        char direction = message[strlen(MSG_MOVE) + 3]; // Assuming "MOVE X D" (X = ID, D = direction)
+        char direction = message[strlen(MSG_MOVE) + 3];  // Assuming "MOVE X D" (X = ID, D = direction)
 
-        for (int i = 0; i < gameState->astronaut_count; i++) {
+        for (int i = 0; i < MAX_PLAYERS; i++) {
             if (gameState->astronauts[i].id == id) {
                 time_t now = time(NULL);
 
                 // Check if the astronaut is stunned
                 if (gameState->astronauts[i].stunned_time != 0 && (now - gameState->astronauts[i].stunned_time) < 10) {
                     zmq_send(socket, "You are stunned! Cannot move.", 31, 0);
-                    return; // Prevent the astronaut from moving if stunned
+                    return;  // Prevent the astronaut from moving if stunned
                 }
 
                 int x = gameState->astronauts[i].x;
                 int y = gameState->astronauts[i].y;
 
                 // Handle movement within allowed boundaries
-                if (direction == 'U' && x - 1 >= X_MIN[i]) gameState->astronauts[i].x--;
-                else if (direction == 'D' && x + 1 <= X_MAX[i]) gameState->astronauts[i].x++;
-                else if (direction == 'L' && y - 1 >= Y_MIN[i]) gameState->astronauts[i].y--;
-                else if (direction == 'R' && y + 1 <= Y_MAX[i]) gameState->astronauts[i].y++;
+                if (direction == 'U' && x - 1 >= X_MIN[i])
+                    gameState->astronauts[i].x--;
+                else if (direction == 'D' && x + 1 <= X_MAX[i])
+                    gameState->astronauts[i].x++;
+                else if (direction == 'L' && y - 1 >= Y_MIN[i])
+                    gameState->astronauts[i].y--;
+                else if (direction == 'R' && y + 1 <= Y_MAX[i])
+                    gameState->astronauts[i].y++;
                 break;
             }
         }
         zmq_send(socket, "Move processed", 15, 0);
-    }
-    else if (strncmp(message, MSG_ZAP, strlen(MSG_ZAP)) == 0) {
+    } else if (strncmp(message, MSG_ZAP, strlen(MSG_ZAP)) == 0) {
         char id = message[strlen(MSG_ZAP) + 1];
         int player = -1;
+        int previous_score;
+        int play_score = 0;
 
-        for (int i = 0; i < gameState->astronaut_count; i++) {
+        for (int i = 0; i < MAX_PLAYERS; i++) {
             if (gameState->astronauts[i].id == id) {
+                previous_score = gameState->astronauts[i].score;
+
                 player = i;
                 time_t now = time(NULL);
 
                 // Check if the astronaut is stunned
                 if (gameState->astronauts[i].stunned_time != 0 && (now - gameState->astronauts[i].stunned_time) < 10) {
                     zmq_send(socket, "You are stunned! Cannot shoot.", 31, 0);
-                    return; // Prevent the astronaut from shooting if stunned
+                    return;  // Prevent the astronaut from shooting if stunned
                 }
 
                 // Check if enough time has passed since the last shot
                 if (now - gameState->astronauts[i].last_shot_time < 3) {
                     zmq_send(socket, "You must wait before shooting again.", 38, 0);
-                    return; // Prevent shooting if within cooldown period
+                    return;  // Prevent shooting if within cooldown period
                 }
 
                 int x = gameState->astronauts[i].x, y = gameState->astronauts[i].y;
@@ -229,126 +347,135 @@ void process_message(void *socket, char *message, GameState *gameState) {
                 gameState->astronauts[i].last_shot_time = now;
 
                 // Determine shot direction based on the player index
-                if (i == 0 || i == 1) { // Players 0 and 1: shoot to the right
+                if (i == 0 || i == 1) {  // Players 0 and 1: shoot to the right
                     for (int j = y + 1; j < BOARD_SIZE; j++) {
-                        if (gameState->board[x][j] == '*') { // Alien hit
-                
-                            gameState->astronauts[i].score++; // Increase score
+                        if (gameState->board[x][j] == '*') {  // Alien hit
+                            play_score++;
+                            gameState->astronauts[i].score++;  // Increase score
                             // Remove alien after hit
                             for (int k = 0; k < gameState->alien_count; k++) {
                                 if (gameState->aliens[k].x == x && gameState->aliens[k].y == j) {
-                                    remove_alien(k, gameState); // Remove alien
+                                    remove_alien(k, gameState);  // Remove alien
                                     break;
                                 }
                             }
-                        }
-                        else if (isalnum(gameState->board[x][j])) { // Astronaut hit
+                        } else if (isalnum(gameState->board[x][j])) {  // Astronaut hit
                             // Stun the astronaut if hit
                             for (int k = 0; k < gameState->astronaut_count; k++) {
                                 if (gameState->astronauts[k].x == x && gameState->astronauts[k].y == j) {
-                                    gameState->astronauts[k].stunned_time = now; // Set stunned time
+                                    gameState->astronauts[k].stunned_time = now;  // Set stunned time
                                     break;
                                 }
                             }
-                        }
-                        else gameState->board[x][j] = '-'; // Mark the shot with a line (horizontal)
-                        
+                        } else
+                            gameState->board[x][j] = '-';  // Mark the shot with a line (horizontal)
                     }
-                }
-                else if (i == 2 || i == 3) { // Players 2 and 3: shoot to the left
+                } else if (i == 2 || i == 3) {  // Players 2 and 3: shoot to the left
                     for (int j = y - 1; j >= 0; j--) {
-                        if (gameState->board[x][j] == '*') { // Alien hit
-                            gameState->astronauts[i].score++; // Increase score
+                        if (gameState->board[x][j] == '*') {  // Alien hit
+                            play_score++;
+                            gameState->astronauts[i].score++;  // Increase score
                             // Remove alien after hit
                             for (int k = 0; k < gameState->alien_count; k++) {
                                 if (gameState->aliens[k].x == x && gameState->aliens[k].y == j) {
-                                    remove_alien(k, gameState); // Remove alien
+                                    remove_alien(k, gameState);  // Remove alien
                                     break;
                                 }
                             }
-                        }
-                        else if (isalnum(gameState->board[x][j])) { // Astronaut hit
+                        } else if (isalnum(gameState->board[x][j])) {  // Astronaut hit
                             // Stun the astronaut if hit
                             for (int k = 0; k < gameState->astronaut_count; k++) {
                                 if (gameState->astronauts[k].x == x && gameState->astronauts[k].y == j) {
-                                    gameState->astronauts[k].stunned_time = now; // Set stunned time
+                                    gameState->astronauts[k].stunned_time = now;  // Set stunned time
                                     break;
                                 }
                             }
-                        }
-                        else gameState->board[x][j] = '-'; // Mark the shot with a line (horizontal)
+                        } else
+                            gameState->board[x][j] = '-';  // Mark the shot with a line (horizontal)
                     }
                 }
 
-                if (i == 4 || i == 5) { // Players 0 and 1: shoot to the right
+                if (i == 4 || i == 5) {  // Players 0 and 1: shoot to the right
                     for (int j = x + 1; j < BOARD_SIZE; j++) {
-                        if (gameState->board[j][y] == '*') { // Alien hit
-                
-                            gameState->astronauts[i].score++; // Increase score
+                        if (gameState->board[j][y] == '*') {  // Alien hit
+                            play_score++;
+                            gameState->astronauts[i].score++;  // Increase score
                             // Remove alien after hit
                             for (int k = 0; k < gameState->alien_count; k++) {
                                 if (gameState->aliens[k].x == j && gameState->aliens[k].y == y) {
-                                    remove_alien(k, gameState); // Remove alien
+                                    remove_alien(k, gameState);  // Remove alien
                                     break;
                                 }
                             }
-                        }
-                        else if (isalnum(gameState->board[j][y])) { // Astronaut hit
+                        } else if (isalnum(gameState->board[j][y])) {  // Astronaut hit
                             // Stun the astronaut if hit
                             for (int k = 0; k < gameState->astronaut_count; k++) {
                                 if (gameState->astronauts[k].x == j && gameState->astronauts[k].y == y) {
-                                    gameState->astronauts[k].stunned_time = now; // Set stunned time
+                                    gameState->astronauts[k].stunned_time = now;  // Set stunned time
                                     break;
                                 }
                             }
-                        }
-                        else gameState->board[j][y] = '|'; // Mark the shot with a line (horizontal)
-                        
+                        } else
+                            gameState->board[j][y] = '|';  // Mark the shot with a line (horizontal)
                     }
-                }
-                else if (i == 6 || i == 7) { // Players 2 and 3: shoot to the left
+                } else if (i == 6 || i == 7) {  // Players 2 and 3: shoot to the left
                     for (int j = x - 1; j >= 0; j--) {
-                        if (gameState->board[j][y] == '*') { // Alien hit
-                            gameState->astronauts[i].score++; // Increase score
+                        if (gameState->board[j][y] == '*') {  // Alien hit
+                            play_score++;
+                            gameState->astronauts[i].score++;  // Increase score
                             // Remove alien after hit
                             for (int k = 0; k < gameState->alien_count; k++) {
                                 if (gameState->aliens[k].x == j && gameState->aliens[k].y == y) {
-                                    remove_alien(k, gameState); // Remove alien
+                                    remove_alien(k, gameState);  // Remove alien
                                     break;
                                 }
                             }
-                        }
-                        else if (isalnum(gameState->board[j][y])) { // Astronaut hit
+                        } else if (isalnum(gameState->board[j][y])) {  // Astronaut hit
                             // Stun the astronaut if hit
                             for (int k = 0; k < gameState->astronaut_count; k++) {
                                 if (gameState->astronauts[k].x == j && gameState->astronauts[k].y == y) {
-                                    gameState->astronauts[k].stunned_time = now; // Set stunned time
+                                    gameState->astronauts[k].stunned_time = now;  // Set stunned time
                                     break;
                                 }
                             }
-                        }
-                        else gameState->board[j][y] = '|'; // Mark the shot with a line (horizontal)
+                        } else
+                            gameState->board[j][y] = '|';  // Mark the shot with a line (horizontal)
                     }
                 }
 
-                render_board(gameState); // Render the board after the shot is marked
+                render_board(gameState);  // Render the board after the shot is marked
+                zmq_send(publisher, "SPCINVDRS", 10, ZMQ_SNDMORE);
+                zmq_send(publisher, gameState, sizeof(GameState), 0);
                 usleep(500000);
-                break; // Break after processing the zap for the current astronaut
+                break;  // Break after processing the zap for the current astronaut
             }
         }
 
         char message[56];
-        sprintf(message, "Your current score is %d.", gameState->astronauts[player].score);
+        sprintf(message, "This play: %d points | Current score: %d", play_score, gameState->astronauts[player].score);
         zmq_send(socket, message, strlen(message), 0);
     }
     update_board(gameState);
     render_score(gameState);
-    render_board(gameState); // Render the board after the shot is marked
+    render_board(gameState);  // Render the board after the shot is marked
 }
 
+/**
+ * Main function for the game server application.
+ *
+ * This function initializes ZeroMQ context and sockets for handling
+ * client requests and publishing game state updates. It sets up the
+ * game state, renders the initial board and scores, and forks a child
+ * process to send periodic keep-alive messages. The parent process
+ * continuously listens for player messages, processes them, and
+ * broadcasts the updated game state. The game ends when all aliens
+ * are removed, displaying the final scores before cleanup.
+ *
+ * @return EXIT_SUCCESS on successful execution.
+ */
 int main() {
     void *context = zmq_ctx_new();
-    void *socket = zmq_socket(context, ZMQ_REP); // Using REP socket type 
+    void *socket = zmq_socket(context, ZMQ_REP);  // Using REP socket type
     void *publisher = zmq_socket(context, ZMQ_PUB);
     int rc = zmq_bind(socket, SERVER_ADDRESS);
     assert(rc == 0);
@@ -356,7 +483,7 @@ int main() {
     assert(rc == 0);
 
     GameState gameState;
-    init_game_state(&gameState); // Initialize the game state
+    init_game_state(&gameState);  // Initialize the game state
     render_board(&gameState);
     render_score(&gameState);
     pid_t pid = fork();
@@ -370,7 +497,7 @@ int main() {
 
     if (pid == 0) {
         void *context = zmq_ctx_new();
-        void *requester = zmq_socket(context, ZMQ_REQ); // Using REP socket type
+        void *requester = zmq_socket(context, ZMQ_REQ);  // Using REP socket type
         zmq_connect(requester, SERVER_ADDRESS);
 
         while (1) {
@@ -381,18 +508,18 @@ int main() {
         }
         zmq_close(requester);
         zmq_ctx_destroy(context);
-    }
-    else {
+    } else {
         char message[32];
         while (1) {
             zmq_recv(socket, message, sizeof(message), 0);
-            process_message(socket, message, &gameState); // Handle player messages
+            process_message(socket, message, &gameState, publisher);  // Handle player messages
             zmq_send(publisher, "SPCINVDRS", 10, ZMQ_SNDMORE);
-            zmq_send(publisher, &gameState, sizeof(GameState), 0);   
+            zmq_send(publisher, &gameState, sizeof(GameState), 0);
             if (gameState.alien_count == 0) {
                 mvprintw(0, 0, "Game Over!");
                 mvprintw(1, 0, "Scores:");
-                for (int i = 0; i < gameState.astronaut_count; ++i) mvprintw(2 + i, 0, "Player %c: %d", gameState.astronauts[i].id, gameState.astronauts[i].score);
+                for (int i = 0; i < gameState.astronaut_count; ++i)
+                    mvprintw(2 + i, 0, "Player %c: %d", gameState.astronauts[i].id, gameState.astronauts[i].score);
                 refresh();
                 sleep(5);
                 break;
