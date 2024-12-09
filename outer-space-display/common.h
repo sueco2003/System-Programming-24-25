@@ -1,24 +1,42 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5540"
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5541"
+#include <curses.h>  // for delwin, mvwprintw, newwin, wrefresh, WINDOW, box
+#include <time.h>    // for time_t
+#include <zmq.h>     // for zmq_recv, zmq_close, zmq_connect, zmq_ctx_destroy
+
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5546"
 
 #define BOARD_SIZE 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 40 // 1/3 of the board
+#define MAX_ALIENS 166 // 1/3 of the board
 
-// Message types
-#define MSG_CONNECT "Astronaut_connect"
-#define MSG_DISCONNECT "Astronaut_disconnect"
-#define MSG_MOVE "Astronaut_movement"
-#define MSG_ZAP "Astronaut_zap"
+// Structs for astronaut and alien
+typedef struct
+{
+    char id;
+    int x, y;
+    int score;
+    time_t stunned_time;
+    time_t last_shot_time;
+} Astronaut;
 
-// Directions
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
+typedef struct
+{
+    int x, y;
+} Alien;
+
+// Shared game state
+typedef struct
+{
+    Astronaut astronauts[MAX_PLAYERS];
+    Alien aliens[MAX_ALIENS];
+    char board[BOARD_SIZE][BOARD_SIZE];
+    int astronaut_count;
+    int alien_count;
+} GameState;
+
+
 
 
 

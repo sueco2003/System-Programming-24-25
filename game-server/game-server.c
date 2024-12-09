@@ -1,57 +1,4 @@
-#include <assert.h>  // for assert
-#include <ctype.h>   // for isalnum
-#include <curses.h>  // for mvwprintw, newwin, wrefresh, mvprintw, WINDOW
-#include <stdio.h>   // for sprintf, perror
-#include <stdlib.h>  // for rand, exit, EXIT_FAILURE, EXIT_SUCCESS
-#include <string.h>  // for strlen, strncmp, memset
-#include <time.h>    // for time, time_t
-#include <unistd.h>  // for sleep, NULL, fork, usleep, pid_t
-#include <zmq.h>     // for zmq_send, zmq_close, zmq_ctx_destroy, zmq_socket
-
-#define SERVER_ADDRESS "tcp://127.0.0.1:5540"
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5541"
-
-#define BOARD_SIZE 20
-#define MAX_PLAYERS 8
-#define MAX_ALIENS 166  // 1/3 of the board
-
-// Message types
-#define MSG_CONNECT "Astronaut_connect"
-#define MSG_DISCONNECT "Astronaut_disconnect"
-#define MSG_MOVE "Astronaut_movement"
-#define MSG_ZAP "Astronaut_zap"
-#define KEEP_ALIVE "Update aliens!"
-
-// Structs for astronaut and alien
-typedef struct {
-    char id;
-    int x, y;
-    int score;
-    time_t stunned_time;
-    time_t last_shot_time;
-} Astronaut;
-
-typedef struct {
-    int x, y;
-} Alien;
-
-// Shared game state
-typedef struct {
-    Astronaut astronauts[MAX_PLAYERS];
-    Alien aliens[MAX_ALIENS];
-    char board[BOARD_SIZE][BOARD_SIZE];
-    int astronaut_count;
-    int alien_count;
-} GameState;
-
-// Constants for X and Y limits for regions
-int Y_MAX[] = {0, 1, 18, 19, 17, 17, 17, 17};
-int Y_MIN[] = {0, 1, 18, 19, 2, 2, 2, 2};
-int X_MAX[] = {17, 17, 17, 17, 0, 1, 18, 19};
-int X_MIN[] = {2, 2, 2, 2, 0, 1, 18, 19};
-
-// Array para verificar quais IDs estão em uso (de 'A' a 'H')
-int astronaut_ids_in_use[MAX_PLAYERS] = {0};  // 0: disponível, 1: em uso
+#include "common.h"
 
 /**
  * Updates the game board in the GameState structure.
@@ -238,8 +185,9 @@ void update_aliens(GameState *gameState) {
  * @param message The message received from a player.
  * @param gameState Pointer to the GameState structure to be updated.
  */
-void process_message(void *socket, char *message, GameState *gameState, void *publisher) {
+void process_message(void *socket, char *message, GameState *gameState, void *publisher , char ** validation_tokens) {
     if (strncmp(message, MSG_CONNECT, strlen(MSG_CONNECT)) == 0) {
+        srand(time(NULL));
         char id = '\0';
         int index;
         if (gameState->astronaut_count >= MAX_PLAYERS) {
@@ -249,13 +197,19 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
 
         for (char player = 'A'; player <= 'H'; player++) {
             index = player - 'A';  // Calcular o índice de 0 a 7
+            
             if (astronaut_ids_in_use[index] == 0) {
                 astronaut_ids_in_use[index] = 1;  // Marcar como em uso
                 id = player;
                 break;
             }
         }
-
+        validation_tokens[id - 'A'] = (char*)malloc(7 * sizeof(char));
+        //Create a random token
+        for (int i = 0; i <= 5; i++) {
+            validation_tokens[id-'A'][i] = (rand() % 26) + 'A'; // 26 letters from 'A' to 'Z'
+        }
+        validation_tokens[id-'A'][6] = '\0';
         // Randomly choose coordinates for the new astronaut
         int x = X_MIN[index] + (rand() % (X_MAX[index] - X_MIN[index] + 1));
         int y = Y_MIN[index] + (rand() % (Y_MAX[index] - Y_MIN[index] + 1));
@@ -264,12 +218,20 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         gameState->astronaut_count++;
 
         // Send confirmation response
-        char response[27];
-        sprintf(response, "Welcome! You are player %c.", id);
+        char response[50];
+        sprintf(response, "Welcome! You are player %c %s", id , validation_tokens[index]);
         zmq_send(socket, response, strlen(response), 0);  // Send the message
     } else if (strncmp(message, MSG_DISCONNECT, strlen(MSG_DISCONNECT)) == 0) {
         int found = 0;  // Track if the astronaut is found
-        char id = message[strlen(MSG_DISCONNECT) + 1];
+        char id;
+        char *token_message = malloc(7);
+        sscanf(message, "Astronaut_disconnect %c %s", &id , token_message);
+        token_message[6] = '\0';
+        if(strcmp(token_message, validation_tokens[id - 'A']) != 0){
+            zmq_send(socket, "Invalid token! You are cheating", 31, 0);
+            return;
+        }
+        free(token_message);
         int index_to_remove = id - 'A';  // Index corresponds to 'A' to 'H'
 
         if (index_to_remove >= 0 && index_to_remove < MAX_PLAYERS && astronaut_ids_in_use[index_to_remove] == 1) {
@@ -287,9 +249,15 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         update_aliens(gameState);
         zmq_send(socket, "HI!", 3, 0);
     } else if (strncmp(message, MSG_MOVE, strlen(MSG_MOVE)) == 0) {
-        char id = message[strlen(MSG_MOVE) + 1];
-        char direction = message[strlen(MSG_MOVE) + 3];  // Assuming "MOVE X D" (X = ID, D = direction)
-
+        char id ,direction;
+        char *token_message = malloc(7);
+        sscanf(message, "Astronaut_movement %c %c %s", &id , &direction, token_message);
+        token_message[6] = '\0';
+        if(strcmp(token_message, validation_tokens[id - 'A']) != 0){
+            zmq_send(socket, "Invalid token! You are cheating", 31, 0);
+            return;
+        }
+        free(token_message);
         for (int i = 0; i < MAX_PLAYERS; i++) {
             if (gameState->astronauts[i].id == id) {
                 time_t now = time(NULL);
@@ -321,7 +289,14 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         int player = -1;
         int previous_score;
         int play_score = 0;
-
+        char *token_message = malloc(7);
+        sscanf(message, "Astronaut_zap %c %s", &id, token_message);
+        token_message[6] = '\0';
+        if(strcmp(token_message, validation_tokens[id - 'A']) != 0){
+            zmq_send(socket, "Invalid token! You are cheating", 31, 0);
+            return;
+        }
+        free(token_message);
         for (int i = 0; i < MAX_PLAYERS; i++) {
             if (gameState->astronauts[i].id == id) {
                 previous_score = gameState->astronauts[i].score;
@@ -486,6 +461,9 @@ int main() {
     init_game_state(&gameState);  // Initialize the game state
     render_board(&gameState);
     render_score(&gameState);
+
+    char ** validation_tokens = malloc(8 * sizeof(char *));
+
     pid_t pid = fork();
     if (pid < 0) {
         perror("Fork failed");
@@ -512,7 +490,7 @@ int main() {
         char message[32];
         while (1) {
             zmq_recv(socket, message, sizeof(message), 0);
-            process_message(socket, message, &gameState, publisher);  // Handle player messages
+            process_message(socket, message, &gameState, publisher, validation_tokens);  // Handle player messages
             zmq_send(publisher, "SPCINVDRS", 10, ZMQ_SNDMORE);
             zmq_send(publisher, &gameState, sizeof(GameState), 0);
             if (gameState.alien_count == 0) {

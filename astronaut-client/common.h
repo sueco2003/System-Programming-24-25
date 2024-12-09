@@ -1,23 +1,19 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5540"
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5541"
+#include <curses.h>  // for mvprintw, refresh, clrtoeol, endwin, initscr
+#include <stdio.h>   // for sprintf, printf
+#include <string.h>  // for strlen, strcmp
+#include <unistd.h>  // for sleep
+#include <zmq.h>     // for zmq_recv, zmq_send, zmq_close, zmq_connect, zmq_...
 
-#define BOARD_SIZE 20
-#define MAX_PLAYERS 8
-#define MAX_ALIENS 40 // 1/3 of the board
+#define SERVER_ADDRESS "tcp://127.0.0.1:5551"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5552"
 
-// Message types
+
 #define MSG_CONNECT "Astronaut_connect"
 #define MSG_DISCONNECT "Astronaut_disconnect"
 #define MSG_MOVE "Astronaut_movement"
 #define MSG_ZAP "Astronaut_zap"
-
-// Directions
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
 
 #endif
