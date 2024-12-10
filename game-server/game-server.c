@@ -185,7 +185,7 @@ void update_aliens(GameState *gameState) {
  * @param message The message received from a player.
  * @param gameState Pointer to the GameState structure to be updated.
  */
-void process_message(void *socket, char *message, GameState *gameState, void *publisher , char ** validation_tokens) {
+void process_message(void *socket, char *message, GameState *gameState, void *publisher, char **validation_tokens) {
     if (strncmp(message, MSG_CONNECT, strlen(MSG_CONNECT)) == 0) {
         srand(time(NULL));
         char id = '\0';
@@ -197,19 +197,19 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
 
         for (char player = 'A'; player <= 'H'; player++) {
             index = player - 'A';  // Calcular o índice de 0 a 7
-            
+
             if (astronaut_ids_in_use[index] == 0) {
                 astronaut_ids_in_use[index] = 1;  // Marcar como em uso
                 id = player;
                 break;
             }
         }
-        validation_tokens[id - 'A'] = (char*)malloc(7 * sizeof(char));
-        //Create a random token
+        validation_tokens[id - 'A'] = (char *)malloc(7 * sizeof(char));
+        // Create a random token
         for (int i = 0; i <= 5; i++) {
-            validation_tokens[id-'A'][i] = (rand() % 26) + 'A'; // 26 letters from 'A' to 'Z'
+            validation_tokens[id - 'A'][i] = (rand() % 26) + 'A';  // 26 letters from 'A' to 'Z'
         }
-        validation_tokens[id-'A'][6] = '\0';
+        validation_tokens[id - 'A'][6] = '\0';
         // Randomly choose coordinates for the new astronaut
         int x = X_MIN[index] + (rand() % (X_MAX[index] - X_MIN[index] + 1));
         int y = Y_MIN[index] + (rand() % (Y_MAX[index] - Y_MIN[index] + 1));
@@ -219,15 +219,15 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
 
         // Send confirmation response
         char response[50];
-        sprintf(response, "Welcome! You are player %c %s", id , validation_tokens[index]);
+        sprintf(response, "Welcome! You are player %c %s", id, validation_tokens[index]);
         zmq_send(socket, response, strlen(response), 0);  // Send the message
     } else if (strncmp(message, MSG_DISCONNECT, strlen(MSG_DISCONNECT)) == 0) {
         int found = 0;  // Track if the astronaut is found
         char id;
         char *token_message = malloc(7);
-        sscanf(message, "Astronaut_disconnect %c %s", &id , token_message);
+        sscanf(message, "Astronaut_disconnect %c %s", &id, token_message);
         token_message[6] = '\0';
-        if(strcmp(token_message, validation_tokens[id - 'A']) != 0){
+        if (!astronaut_ids_in_use[id - 'A'] || strcmp(token_message, validation_tokens[id - 'A']) != 0) {
             zmq_send(socket, "Invalid token! You are cheating", 31, 0);
             return;
         }
@@ -241,6 +241,7 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
             gameState->astronauts[index_to_remove] = (Astronaut){0};  // Reset astronaut's state
             astronaut_ids_in_use[index_to_remove] = 0;                // Mark ID as available
             gameState->astronaut_count--;                             // Decrease astronaut count
+            free(validation_tokens[id - 'A']);
         }
 
         // Send appropriate response
@@ -249,11 +250,11 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         update_aliens(gameState);
         zmq_send(socket, "HI!", 3, 0);
     } else if (strncmp(message, MSG_MOVE, strlen(MSG_MOVE)) == 0) {
-        char id ,direction;
+        char id, direction;
         char *token_message = malloc(7);
-        sscanf(message, "Astronaut_movement %c %c %s", &id , &direction, token_message);
+        sscanf(message, "Astronaut_movement %c %c %s", &id, &direction, token_message);
         token_message[6] = '\0';
-        if(strcmp(token_message, validation_tokens[id - 'A']) != 0 || token_message==NULL){
+        if (!astronaut_ids_in_use[id - 'A'] || strcmp(token_message, validation_tokens[id - 'A']) != 0 || token_message == NULL) {
             zmq_send(socket, "Invalid token! You are cheating", 31, 0);
             return;
         }
@@ -292,7 +293,7 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         char *token_message = malloc(7);
         sscanf(message, "Astronaut_zap %c %s", &id, token_message);
         token_message[6] = '\0';
-        if(strcmp(token_message, validation_tokens[id - 'A']) != 0){
+        if (!astronaut_ids_in_use[id - 'A'] || strcmp(token_message, validation_tokens[id - 'A']) != 0) {
             zmq_send(socket, "Invalid token! You are cheating", 31, 0);
             return;
         }
@@ -430,7 +431,7 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         char message[56];
         sprintf(message, "This play: %d points | Current score: %d", play_score, gameState->astronauts[player].score);
         zmq_send(socket, message, strlen(message), 0);
-    }else{
+    } else {
         zmq_send(socket, "Invalid message", 15, 0);
         return;
     }
@@ -466,7 +467,10 @@ int main() {
     render_board(&gameState);
     render_score(&gameState);
 
-    char ** validation_tokens = malloc(8 * sizeof(char *));
+    char **validation_tokens = malloc(8 * sizeof(char *));
+    for (int i = 0; i < 8; i++) {
+        validation_tokens[i] = "\0";
+    }
 
     pid_t pid = fork();
     if (pid < 0) {
