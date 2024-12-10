@@ -7,7 +7,7 @@ SRCS = astronaut-client/astronaut-client.c game-server/game-server.c outer-space
 all: $(TARGETS)
 
 %: %.c
-	$(CC) $< -o $@ $(LIBS)
+	$(CC) $< -g -o $@ $(LIBS)
 
 clean:
 	rm -f $(TARGETS)

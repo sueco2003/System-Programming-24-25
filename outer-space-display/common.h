@@ -36,6 +36,9 @@ typedef struct
     int alien_count;
 } GameState;
 
+// Array para verificar quais IDs estão em uso (de 'A' a 'H')
+int astronaut_ids_in_use[MAX_PLAYERS] = {0};  // 0: disponível, 1: em uso
+
 
 
 

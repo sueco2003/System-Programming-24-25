@@ -420,6 +420,7 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
 
                 render_board(gameState);  // Render the board after the shot is marked
                 zmq_send(publisher, "SPCINVDRS", 10, ZMQ_SNDMORE);
+                zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
                 zmq_send(publisher, gameState, sizeof(GameState), 0);
                 usleep(500000);
                 break;  // Break after processing the zap for the current astronaut
@@ -493,6 +494,7 @@ int main() {
             zmq_recv(socket, message, sizeof(message), 0);
             process_message(socket, message, &gameState, publisher, validation_tokens);  // Handle player messages
             zmq_send(publisher, "SPCINVDRS", 10, ZMQ_SNDMORE);
+            zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
             zmq_send(publisher, &gameState, sizeof(GameState), 0);
             if (gameState.alien_count == 0) {
                 mvprintw(0, 0, "Game Over!");
