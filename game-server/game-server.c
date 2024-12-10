@@ -430,6 +430,9 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         char message[56];
         sprintf(message, "This play: %d points | Current score: %d", play_score, gameState->astronauts[player].score);
         zmq_send(socket, message, strlen(message), 0);
+    }else{
+        zmq_send(socket, "Invalid message", 15, 0);
+        return;
     }
     update_board(gameState);
     render_score(gameState);

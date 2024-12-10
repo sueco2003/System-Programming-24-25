@@ -5,7 +5,7 @@
 #include <time.h>    // for time_t
 #include <zmq.h>     // for zmq_recv, zmq_close, zmq_connect, zmq_ctx_destroy
 
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5542"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5544"
 
 #define BOARD_SIZE 20
 #define MAX_PLAYERS 8

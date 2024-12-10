@@ -4,8 +4,8 @@
 #include <unistd.h>  // for sleep
 #include <zmq.h>     // for zmq_recv, zmq_send, zmq_close, zmq_connect, zmq_...
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5541"
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5542"
+#define SERVER_ADDRESS "tcp://127.0.0.1:5543"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5544"
 
 
 #define MSG_CONNECT "Astronaut_connect"
@@ -41,6 +41,18 @@ void run_client() {
    
     char astronaut_id = 'A';
     refresh();
+
+    // Send the message to the server and wait for a response
+        zmq_send(socket, "ola", 4, 0);
+        bytes = zmq_recv(socket, response, sizeof(response), 0);
+        response[bytes] = '\0';
+        move(3, 0);          // move to begining of line
+        clrtoeol(); 
+        move(4, 0);          // move to begining of line
+        clrtoeol(); 
+        refresh();
+        mvprintw(3, 0, "%s", response);
+        refresh();
 
     while (1) {
 
