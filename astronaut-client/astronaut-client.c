@@ -32,7 +32,7 @@ void run_client() {
   
     char astronaut_id;
     sscanf(response, "Welcome! You are player %c %s", &astronaut_id , token);
-    mvprintw(1, 0, "Welcome! You are player %c %s", astronaut_id, token);   // Display the response
+    mvprintw(1, 0, "Welcome! You are player %c", astronaut_id);   // Display the response
     mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");   // Display the response
     refresh();
 
