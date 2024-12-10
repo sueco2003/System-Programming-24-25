@@ -1,5 +1,18 @@
+#include <curses.h>  // for mvprintw, refresh, clrtoeol, endwin, initscr
+#include <stdio.h>   // for sprintf, printf
+#include <string.h>  // for strlen, strcmp
+#include <unistd.h>  // for sleep
+#include <zmq.h>     // for zmq_recv, zmq_send, zmq_close, zmq_connect, zmq_...
 
-#include "common.h"
+#define SERVER_ADDRESS "tcp://127.0.0.1:5551"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5552"
+
+
+#define MSG_CONNECT "Astronaut_connect"
+#define MSG_DISCONNECT "Astronaut_disconnect"
+#define MSG_MOVE "Astronaut_movement"
+#define MSG_ZAP "Astronaut_zap"
+
 
 /**
  * Runs the client application, handling user input and server communication.
@@ -22,9 +35,6 @@ void run_client() {
     void *socket = zmq_socket(context, ZMQ_REQ);
     zmq_connect(socket, SERVER_ADDRESS);
 
-    // Connect to the server
-    zmq_send(socket, MSG_CONNECT, strlen(MSG_CONNECT), 0);
-
     // Receive response from the server and extract astronaut ID
     char response[65];
     int bytes = zmq_recv(socket, response, sizeof(response), 0);
@@ -32,7 +42,7 @@ void run_client() {
     mvprintw(1, 0, "%s", response);   // Display the response
     mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");   // Display the response
     char astronaut_id;
-    sscanf(response, "Welcome! You are player %c %s", &astronaut_id , token);
+    sscanf(response, "Welcome! You are player %c", &astronaut_id );
     refresh();
 
     while (1) {
@@ -41,12 +51,12 @@ void run_client() {
 
         // Prepare the movement message based on key press
         char message[38];
-        if (ch == KEY_UP) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'U', token);
-        else if (ch == KEY_DOWN)sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'D', token);
-        else if (ch == KEY_LEFT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'L' , token);
-        else if (ch == KEY_RIGHT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'R' , token);
-        else if (ch == ' ') sprintf(message, "%s %c %s", MSG_ZAP, astronaut_id, token);
-        else if (ch == 'q' || ch == 'Q') sprintf(message, "%s %c %s", MSG_DISCONNECT, astronaut_id, token);
+        if (ch == KEY_UP) sprintf(message, "%s %c %c", MSG_MOVE, astronaut_id, 'U');
+        else if (ch == KEY_DOWN)sprintf(message, "%s %c %c ", MSG_MOVE, astronaut_id, 'D');
+        else if (ch == KEY_LEFT) sprintf(message, "%s %c %c ", MSG_MOVE, astronaut_id, 'L' );
+        else if (ch == KEY_RIGHT) sprintf(message, "%s %c %c", MSG_MOVE, astronaut_id, 'R'  );
+        else if (ch == ' ') sprintf(message, "%s %c ", MSG_ZAP, astronaut_id );
+        else if (ch == 'q' || ch == 'Q') sprintf(message, "%s %c ", MSG_DISCONNECT, astronaut_id);
         else continue; // Skip unrecognized keys
 
         // Send the message to the server and wait for a response
