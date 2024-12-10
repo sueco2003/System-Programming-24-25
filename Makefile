@@ -1,13 +1,15 @@
-SUBDIRS := $(wildcard */)
+CC = gcc
+LIBS = -lzmq -lncurses
 
-all: $(SUBDIRS)
+TARGETS = astronaut-client/astronaut-client game-server/game-server outer-space-display/outer-space-display
+SRCS = astronaut-client/astronaut-client.c game-server/game-server.c outer-space-display/outer-space-display.c
 
-$(SUBDIRS):
-	$(MAKE) -C $@
+all: $(TARGETS)
+
+%: %.c
+	$(CC) $< -o $@ $(LIBS)
 
 clean:
-	@for dir in $(SUBDIRS); do \
-		$(MAKE) -C $$dir clean; \
-	done
+	rm -f $(TARGETS)
 
-.PHONY: all clean $(SUBDIRS)
+.PHONY: all clean

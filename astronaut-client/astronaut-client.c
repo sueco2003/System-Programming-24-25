@@ -32,8 +32,7 @@ void run_client() {
     mvprintw(1, 0, "%s", response);   // Display the response
     mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");   // Display the response
     char astronaut_id;
-    sscanf(response, "Welcome! You are player %c %s", &astronaut_id , token);
-    mvprintw(5, 0, "%s", token);   // Display the response
+    sscanf(response, "Welcome! You are player %c", &astronaut_id );
     refresh();
 
     while (1) {

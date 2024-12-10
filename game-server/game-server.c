@@ -158,7 +158,7 @@ void update_aliens(GameState *gameState) {
         // Update alien position while keeping it within the range 2–17
         gameState->aliens[i].x = (gameState->aliens[i].x + dx + BOARD_SIZE) % BOARD_SIZE;
         gameState->aliens[i].y = (gameState->aliens[i].y + dy + BOARD_SIZE) % BOARD_SIZE;
-
+    
         // Ensure aliens are within the restricted area (2–17)
         if (gameState->aliens[i].x < 2)
             gameState->aliens[i].x = 2;
