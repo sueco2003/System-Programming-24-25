@@ -13,8 +13,8 @@
 
 
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5551" // VER ESTES IPS O QUE E PARA POR AQUI
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5552"
+#define SERVER_ADDRESS "tcp://127.0.0.1:5541" // VER ESTES IPS O QUE E PARA POR AQUI
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5542"
 
 #define KEEP_ALIVE "Update aliens!"
 

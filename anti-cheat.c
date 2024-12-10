@@ -4,8 +4,8 @@
 #include <unistd.h>  // for sleep
 #include <zmq.h>     // for zmq_recv, zmq_send, zmq_close, zmq_connect, zmq_...
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5551"
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5552"
+#define SERVER_ADDRESS "tcp://127.0.0.1:5541"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5542"
 
 
 #define MSG_CONNECT "Astronaut_connect"
@@ -36,13 +36,10 @@ void run_client() {
     zmq_connect(socket, SERVER_ADDRESS);
 
     // Receive response from the server and extract astronaut ID
-    char response[65];
-    int bytes = zmq_recv(socket, response, sizeof(response), 0);
-    response[bytes] = '\0';
-    mvprintw(1, 0, "%s", response);   // Display the response
-    mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");   // Display the response
-    char astronaut_id;
-    sscanf(response, "Welcome! You are player %c", &astronaut_id );
+    char response[65];  
+    int bytes ;
+   
+    char astronaut_id = 'A';
     refresh();
 
     while (1) {
@@ -55,9 +52,9 @@ void run_client() {
         else if (ch == KEY_DOWN)sprintf(message, "%s %c %c ", MSG_MOVE, astronaut_id, 'D');
         else if (ch == KEY_LEFT) sprintf(message, "%s %c %c ", MSG_MOVE, astronaut_id, 'L' );
         else if (ch == KEY_RIGHT) sprintf(message, "%s %c %c", MSG_MOVE, astronaut_id, 'R'  );
-        else if (ch == ' ') sprintf(message, "%s %c ", MSG_ZAP, astronaut_id );
+        else if (ch == ' ') sprintf(message, "%s %c UKQYAG", MSG_ZAP, astronaut_id );
         else if (ch == 'q' || ch == 'Q') sprintf(message, "%s %c ", MSG_DISCONNECT, astronaut_id);
-        else continue; // Skip unrecognized keys
+        else continue;
 
         // Send the message to the server and wait for a response
         zmq_send(socket, message, strlen(message), 0);

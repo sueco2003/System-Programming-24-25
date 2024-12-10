@@ -59,6 +59,7 @@
   "files.associations": {
     "string.h": "c",
     "common.h": "c",
-    "curses.h": "c"
+    "curses.h": "c",
+    "unistd.h": "c"
   }
 }

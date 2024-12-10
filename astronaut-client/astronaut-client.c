@@ -29,10 +29,11 @@ void run_client() {
     char response[65];
     int bytes = zmq_recv(socket, response, sizeof(response), 0);
     response[bytes] = '\0';
-    mvprintw(1, 0, "%s", response);   // Display the response
-    mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");   // Display the response
+  
     char astronaut_id;
     sscanf(response, "Welcome! You are player %c %s", &astronaut_id , token);
+    mvprintw(1, 0, "Welcome! You are player %c", astronaut_id);   // Display the response
+    mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");   // Display the response
     refresh();
 
     while (1) {

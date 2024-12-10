@@ -158,7 +158,7 @@ void update_aliens(GameState *gameState) {
         // Update alien position while keeping it within the range 2–17
         gameState->aliens[i].x = (gameState->aliens[i].x + dx + BOARD_SIZE) % BOARD_SIZE;
         gameState->aliens[i].y = (gameState->aliens[i].y + dy + BOARD_SIZE) % BOARD_SIZE;
-    
+
         // Ensure aliens are within the restricted area (2–17)
         if (gameState->aliens[i].x < 2)
             gameState->aliens[i].x = 2;
@@ -253,7 +253,7 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
         char *token_message = malloc(7);
         sscanf(message, "Astronaut_movement %c %c %s", &id , &direction, token_message);
         token_message[6] = '\0';
-        if(strcmp(token_message, validation_tokens[id - 'A']) != 0){
+        if(strcmp(token_message, validation_tokens[id - 'A']) != 0 || token_message==NULL){
             zmq_send(socket, "Invalid token! You are cheating", 31, 0);
             return;
         }
@@ -489,6 +489,7 @@ int main() {
     } else {
         char message[32];
         while (1) {
+            memset(message, 0, sizeof(message));
             zmq_recv(socket, message, sizeof(message), 0);
             process_message(socket, message, &gameState, publisher, validation_tokens);  // Handle player messages
             zmq_send(publisher, "SPCINVDRS", 10, ZMQ_SNDMORE);

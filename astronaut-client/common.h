@@ -7,8 +7,8 @@
 #include <unistd.h>  // for sleep
 #include <zmq.h>     // for zmq_recv, zmq_send, zmq_close, zmq_connect, zmq_...
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5551"
-#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5552"
+#define SERVER_ADDRESS "tcp://127.0.0.1:5541"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5542"
 
 
 #define MSG_CONNECT "Astronaut_connect"
