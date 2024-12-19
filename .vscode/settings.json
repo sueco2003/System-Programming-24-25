@@ -61,5 +61,10 @@
     "common.h": "c",
     "curses.h": "c",
     "unistd.h": "c"
+  },
+  "workbench.colorCustomizations": {
+    "activityBar.background": "#4F1150",
+    "titleBar.activeBackground": "#6F1870",
+    "titleBar.activeForeground": "#FEFCFE"
   }
 }
