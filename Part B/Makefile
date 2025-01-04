@@ -40,23 +40,23 @@ all: $(PROTO_C_SRCS) $(PROTO_CPP_SRCS) $(TARGETS)
 %.pb.cc %.pb.h: %.proto
 	$(PROTOC) --cpp_out=. $<
 
-# Compile C sources
-astronaut-client/astronaut-client: astronaut-client/astronaut-client.c $(PROTO_C_HDRS)
-	$(CC) $< -g -o $@ $(LIBS)
+# Compile C sources with Protobuf linkage
+astronaut-client/astronaut-client: astronaut-client/astronaut-client.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
+	$(CC) $< $(PROTO_C_SRCS) -g -o $@ $(LIBS)
 
-astronaut-client-display/astronaut-client-display: astronaut-client-display/astronaut-client-display.c $(PROTO_C_HDRS)
-	$(CC) $< -g -o $@ $(LIBS)
+astronaut-client-display/astronaut-client-display: astronaut-client-display/astronaut-client-display.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
+	$(CC) $< $(PROTO_C_SRCS) -g -o $@ $(LIBS)
 
-game-server/game-server: game-server/game-server.c $(PROTO_C_HDRS)
-	$(CC) $< -g -o $@ $(LIBS)
+game-server/game-server: game-server/game-server.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
+	$(CC) $< $(PROTO_C_SRCS) -g -o $@ $(LIBS)
 
-outer-space-display/outer-space-display: outer-space-display/outer-space-display.c $(PROTO_C_HDRS)
-	$(CC) $< -g -o $@ $(LIBS)
+outer-space-display/outer-space-display: outer-space-display/outer-space-display.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
+	$(CC) $< $(PROTO_C_SRCS) -g -o $@ $(LIBS)
 
-# Compile C++ sources
-space-high-scores/space-high-scores: space-high-scores/space-high-scores.cpp $(PROTO_CPP_HDRS)
-	$(CXX) $< -g -o $@ $(LIBS)
+# Compile C++ sources with Protobuf linkage
+space-high-scores/space-high-scores: space-high-scores/space-high-scores.cpp $(PROTO_CPP_SRCS) $(PROTO_CPP_HDRS)
+	$(CXX) $< $(PROTO_CPP_SRCS) -g -o $@ $(LIBS)
 
 # Clean rule to remove generated files
 clean:
-	rm -f $(TARGETS) $(PROTO_C_SRCS) $(PROTO)
+	rm -f $(TARGETS) $(PROTO_C_SRCS) $(PROTO_C_HDRS) $(PROTO_CPP_SRCS) $(PROTO_CPP_HDRS)

@@ -1,6 +1,5 @@
 #include <zmq.hpp>
-#include "astronauts.pb.h"
-
+#include <iostream>
 int main() {
     zmq::context_t context(1);
     zmq::socket_t socket(context, zmq::socket_type::rep);
