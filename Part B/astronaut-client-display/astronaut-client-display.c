@@ -3,10 +3,10 @@
 
 void *display_game_state() {
 
-    void *subscriber = zmq_socket(context, ZMQ_SUB);
+    subscriber = zmq_socket(context, ZMQ_SUB);
     zmq_connect(subscriber, PUBLISHER_ADDRESS);
-
-    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, MSG_UPDATE, strlen(MSG_UPDATE));	
+    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, MSG_UPDATE, strlen(MSG_UPDATE));
+    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, MSG_SERVER, strlen(MSG_SERVER));		
 
     // Initialize ncurses windows
     initscr();
@@ -33,25 +33,27 @@ void *display_game_state() {
     wrefresh(board_win);
 
     GameState gameState;
+    // memset(&gameState, 0, sizeof(gameState));
+    // memset(&astronaut_ids_in_use, 0, sizeof(astronaut_ids_in_use));
+    
     char topic[strlen(MSG_UPDATE)];
     while (1) {
+    // memset(&gameState, 0, sizeof(gameState));
+    // memset(&astronaut_ids_in_use, 0, sizeof(astronaut_ids_in_use));
         // Receive game state updates
         zmq_recv(subscriber, topic, sizeof(topic), 0);
         if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
-            ungetch('\r');
-            break;
+            zmq_close(socket);
+			endwin();
+            zmq_close(subscriber);
+	        zmq_ctx_destroy(context);
+	        exit(0);
         }
-        else if (strncmp(topic, MSG_THREAD, strlen(MSG_THREAD)) == 0) {
-            char id_received, token_received[6];
-            zmq_recv(subscriber, &id_received, sizeof(id_received), 0);
-            zmq_recv(subscriber, token_received, sizeof(token_received), 0);
-            if (id_received == astronaut_id && strcmp(token_received, token) == 0) {
-                break;
-            }
-        }
-        else if(strncmp(topic, MSG_UPDATE, strlen(MSG_UPDATE)) != 0) continue;
-        zmq_recv(subscriber, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+
+        else if (strncmp(topic, MSG_UPDATE, strlen(MSG_UPDATE)) != 0) continue;
         zmq_recv(subscriber, &gameState, sizeof(GameState), 0);
+        zmq_recv(subscriber, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+        
 
         // Update board and score
         wclear(score_win);
@@ -71,7 +73,7 @@ void *display_game_state() {
                 player_count++;
             }
         }
-
+        refresh();
         wrefresh(board_win);
         wrefresh(score_win);
     }
@@ -84,6 +86,7 @@ void *display_game_state() {
     endwin();
 
     zmq_close(subscriber);
+    return NULL;
 }
 
 /**
@@ -100,8 +103,7 @@ void *run_client() {
     keypad(stdscr, TRUE);
     noecho();
 
-    void *context = zmq_ctx_new();
-    void *socket = zmq_socket(context, ZMQ_REQ);
+    socket = zmq_socket(context, ZMQ_REQ);
     zmq_connect(socket, SERVER_ADDRESS);
 
     void *publisher = zmq_socket(context, ZMQ_PUB);
@@ -128,15 +130,7 @@ void *run_client() {
 		else if (ch == KEY_LEFT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'L', token);
 		else if (ch == KEY_RIGHT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'R', token);
 		else if (ch == ' ') sprintf(message, "%s %c %s", MSG_ZAP, astronaut_id, token);
-		else if (ch == 'q' || ch == 'Q') {
-			zmq_send(publisher, MSG_THREAD, strlen(MSG_THREAD), ZMQ_SNDMORE);
-            zmq_send(publisher, &astronaut_id, sizeof(astronaut_id), ZMQ_SNDMORE);
-            zmq_send(publisher, token, sizeof(token), 0);    
-			sprintf(message, "%s %c %s", MSG_DISCONNECT, astronaut_id, token); 
-		}
-		else if (ch == '\r') {
-			break;
-		}
+		else if (ch == 'q' || ch == 'Q') sprintf(message, "%s %c %s", MSG_DISCONNECT, astronaut_id, token); 
 		else continue;  // Skip unrecognized keys
 
         zmq_send(socket, message, strlen(message), 0);
@@ -147,8 +141,7 @@ void *run_client() {
 		clrtoeol();
         refresh();
 
-        if (strcmp(response, "Disconnected") == 0) {
-            
+        if (strcmp(response, "Disconnected") == 0) { 
 			mvprintw(BOARD_SIZE + 9, 0, "Thanks for playing! See you soon!");
 			refresh();
             break;
@@ -158,6 +151,9 @@ void *run_client() {
     sleep(5);
     endwin();
     zmq_close(socket);
+	zmq_close(subscriber);
+	zmq_ctx_destroy(context);
+	exit(0);
     return NULL;
 }
 

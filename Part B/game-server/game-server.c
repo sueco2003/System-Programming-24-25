@@ -465,9 +465,8 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
 
         render_board(gameState); // Render the board after the shot is marked
         zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-        zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use),
-                 ZMQ_SNDMORE);
-        zmq_send(publisher, gameState, sizeof(GameState), 0);
+        zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
+        zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
         usleep(500000);
         break; // Break after processing the zap for the current
                // astronaut
@@ -503,8 +502,6 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
 void *alien_position_update(void *arg) {
   GameState *gameState = (GameState *)arg;
 
-  void *publisher = zmq_socket(context, ZMQ_PUB);
-
   while (on) {
     pthread_mutex_lock(&mutex);
 
@@ -514,8 +511,8 @@ void *alien_position_update(void *arg) {
     render_score(gameState);
 
     zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
-    zmq_send(publisher, gameState, sizeof(*gameState), 0);
+    zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
+    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
 
     pthread_mutex_unlock(&mutex);
     sleep(1);
@@ -541,9 +538,7 @@ void *alien_position_update(void *arg) {
 void *increase_alien_count(void *arg) {
   GameState *gameState = (GameState *)arg;
 
-  void *publisher = zmq_socket(context, ZMQ_PUB);
-
-  while (on) {
+  while (1) {
     time_t now = time(NULL);
 
     // Lock mutex for alien count and related updates
@@ -565,8 +560,8 @@ void *increase_alien_count(void *arg) {
       render_score(gameState);
 
       zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-      zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
-      zmq_send(publisher, gameState, sizeof(*gameState), 0);
+      zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
+      zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
     } else {
       time_t waiting = last_alien_shot + 10 - now;
       pthread_mutex_unlock(&mutex); // Unlock mutex while sleeping
@@ -591,18 +586,10 @@ void *increase_alien_count(void *arg) {
  */
 void *signal_handler() {
   
-  void *publisher = zmq_socket(context, ZMQ_PUB);
-  void *socket = zmq_socket(context, ZMQ_REQ);
-  zmq_bind(publisher, PUBLISHER_ADDRESS);
-  
-  zmq_connect(socket, SERVER_ADDRESS);
-
-  while (on) {
+  while (1) {
     int c = getch();
     if (c == 'q' || c == 'Q') {
-      on = false;
       zmq_send(publisher, MSG_SERVER, strlen(MSG_SERVER), 0); // Send the topic
-      zmq_send(socket, MSG_SERVER, strlen(MSG_SERVER), 0);
       break;
     }
     else continue;
@@ -610,18 +597,17 @@ void *signal_handler() {
 
   zmq_close(publisher);
   zmq_close(socket);
+  zmq_ctx_destroy(context);
+  endwin();
+  free(gameState);
+  exit(0);
+
   return NULL;
 }
 
 void *server_management(void *arg) {
 
   GameState *gameState = (GameState *)arg;
-
-  void *socket = zmq_socket(context, ZMQ_REP);
-  zmq_bind(socket, SERVER_ADDRESS);
-  void *publisher = zmq_socket(context, ZMQ_PUB);
-  zmq_connect(publisher, PUBLISHER_ADDRESS);
-  
 
   // Allocate memory for validation tokens
   char **validation_tokens = malloc(8 * sizeof(char *));
@@ -631,7 +617,7 @@ void *server_management(void *arg) {
   char message[32];
   last_alien_shot = time(NULL);
 
-  while (on) {
+  while (1) {
     memset(message, 0, sizeof(message));
     zmq_recv(socket, message, sizeof(message), 0);
     if (strncmp(message, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
@@ -648,12 +634,11 @@ void *server_management(void *arg) {
     pthread_mutex_unlock(&mutex);
 
     zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
-    zmq_send(publisher, gameState, sizeof(gameState), 0);
+    zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
+    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+    
 
     if (gameState->alien_count == 0) {
-      on = false;
-      ungetch('\r');
       zmq_send(publisher, MSG_SERVER, strlen(MSG_SERVER), 0);
       mvprintw(0, 0, "Game Over!");
       mvprintw(1, 0, "Scores:");
@@ -670,6 +655,9 @@ void *server_management(void *arg) {
 
   zmq_close(socket);
   zmq_close(publisher);
+  endwin();
+  free(gameState);
+  exit(0);
 
   return NULL;
 }
@@ -693,9 +681,14 @@ int main() {
 
   // Initialize ZMQ context and sockets
   context = zmq_ctx_new();
+  socket = zmq_socket(context, ZMQ_REP);
+  zmq_bind(socket, SERVER_ADDRESS);
+  publisher = zmq_socket(context, ZMQ_PUB);
+  zmq_bind(publisher, PUBLISHER_ADDRESS);
+
 
   // Initialize game state
-  GameState *gameState = malloc(sizeof(GameState));
+  gameState = malloc(sizeof(GameState));
   init_game_state(gameState); // Initialize the game state
   render_board(gameState);
   render_score(gameState);
@@ -718,4 +711,3 @@ int main() {
 
   return EXIT_SUCCESS;
 }
-

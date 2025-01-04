@@ -38,16 +38,25 @@ void display_game_state() {
     wrefresh(line_win);
     wrefresh(column_win);
 
-    GameState gameState;
-    char topic[strlen(MSG_UPDATE)];
+    GameState gameState = {0};
+    memset(astronaut_ids_in_use, 0, sizeof(astronaut_ids_in_use));
+    char topic[256];
     while (1) {
         // Receive game state updates
         zmq_recv(subscriber, topic, sizeof(topic), 0);
         if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
             break;
         }
+        if (strncmp(topic, MSG_UPDATE, strlen(MSG_UPDATE)) != 0) {
+           continue;
+        }
         zmq_recv(subscriber, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
-        zmq_recv(subscriber, &gameState, sizeof(GameState), 0);
+        int bytes_received = zmq_recv(subscriber, &gameState, sizeof(GameState), 0);
+        if (bytes_received != sizeof(GameState)) {
+            fprintf(stderr, "Error: Expected %lu bytes, received %d bytes\n", sizeof(GameState), bytes_received);
+            continue;
+        }
+
 
         wclear(score_win);
         box(score_win, 0, 0);

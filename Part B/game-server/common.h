@@ -7,7 +7,7 @@
 #include <math.h>
 #include <pthread.h>  // for pthread_create, pthread_join
 #include <stdio.h>	  // for sprintf, perror
-#include <stdlib.h>	  // for rand, exit, EXIT_FAILURE, EXIT_SUCCESS
+ 
 #include <string.h>	  // for strlen, strncmp, memset
 #include <string.h>
 #include <time.h>	 // for time, time_t
@@ -70,6 +70,7 @@ int on = 1;  // Flag para manter o loop do cliente ativo
 time_t last_alien_shot; // Última morte de alienígena
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-void *context;
+void *context, *publisher, *socket;
+GameState *gameState;
 
 #endif
