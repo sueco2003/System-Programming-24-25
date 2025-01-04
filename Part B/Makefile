@@ -1,7 +1,7 @@
 CC = gcc
 CXX = g++
 PROTOC = protoc
-LIBS = -lzmq -lprotobuf-c -lncurses -lpthread -lm 
+LIBS = -lzmq -lprotobuf-c -lprotobuf -lncurses -lpthread -lm 
 
 # Protobuf file name (renamed)
 PROTO_FILES = points.proto

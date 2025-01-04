@@ -1,28 +1,46 @@
 #include <zmq.hpp>
+#include <string>
 #include <iostream>
+#include <unistd.h>
+#include <cstdlib>
+#include "../points.pb.h"
+#include "stdlib.h"
+
 int main() {
+    // Create the ZeroMQ context and REP socket
     zmq::context_t context(1);
-    zmq::socket_t socket(context, zmq::socket_type::rep);
+    zmq::socket_t socket(context, ZMQ_REP);
     socket.bind("tcp://*:5559");
 
     while (true) {
+        // Receive the message from the client
         zmq::message_t request;
-        socket.recv(request, zmq::recv_flags::none);
-
-        // Deserialize the data
-        Astronauts astronauts_msg;
-        astronauts_msg.ParseFromArray(request.data(), request.size());
-
-        // Process astronauts (e.g., print them)
-        for (const auto &astronaut : astronauts_msg.astronauts()) {
-            std::cout << "Astronaut ID: " << astronaut.id() << ", Score: " << astronaut.score() << std::endl;
+        auto recv_result = socket.recv(request, zmq::recv_flags::none);
+        if (!recv_result) {
+            std::cerr << "Failed to receive message." << std::endl;
+            continue;
         }
 
-        // Respond with an acknowledgment
-        zmq::message_t reply(5);
-        memcpy(reply.data(), "ACK", 4);
+        // Deserialize the received protobuf message
+        Simple_message msg;
+        if (!msg.ParseFromArray(request.data(), request.size())) {
+            std::cerr << "Failed to parse message." << std::endl;
+            continue;
+        }
+        std::cout << "\033[2J\033[H";
+        std::cout << "High Scores:" << std::endl;
+        for (int i = 0; i < 8; i++) {
+            const Player& player = msg.players(i);
+            if (player.id().empty()) {
+                continue;
+            }
+            std::cout << "Player ID: " << player.id() << ", Score: " << player.score() << std::endl;
+        }
+
+        // Send a response back to the client
+        int response = 1; // Data received successfully
+        zmq::message_t reply(sizeof(response));
+        memcpy(reply.data(), &response, sizeof(response));
         socket.send(reply, zmq::send_flags::none);
     }
-
-    return 0;
 }

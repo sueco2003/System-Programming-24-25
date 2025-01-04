@@ -34,12 +34,13 @@ void *display_game_state() {
         mvwprintw(column_win, 0, i, "%d", i % 10);
     }
 
+    wrefresh(line_win);
+    wrefresh(column_win);
+    
     mvwprintw(score_win, 1, 3, "%s", "SCORE");
     box(board_win, 0, 0);
     box(score_win, 0, 0);
-    wrefresh(line_win);
-    wrefresh(column_win);
-    refresh();
+    
 
     GameState gameState = {0}; 
     char topic[256];

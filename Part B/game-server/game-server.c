@@ -5,33 +5,41 @@ void proto_buffer_send(GameState *gameState) {
     zmq_connect(socket, "tcp://localhost:5559");
 
     // Initialize the Score protobuf message
-    SimpleMessage msg = SIMPLE_MESSAGE__INIT;  // Initialize the message
-    
+    SimpleMessage msg = SIMPLE_MESSAGE__INIT;
     msg.n_players = MAX_PLAYERS;
-    msg.players = malloc(sizeof(Astronaut) * MAX_PLAYERS);
+    msg.players = malloc(sizeof(Player *) * MAX_PLAYERS);
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
-      char id[2] = {gameState->astronauts[i].id, '\0'};
-      strcpy(msg.players[i]->id, id);
-      msg.players[i]->score = gameState->astronauts[i].score;
+        msg.players[i] = malloc(sizeof(Player));
+        player__init(msg.players[i]);
+
+        char *id = malloc(2); // Allocate memory for the ID
+        id[0] = gameState->astronauts[i].id;
+        id[1] = '\0';
+
+        msg.players[i]->id = id;
+        msg.players[i]->score = gameState->astronauts[i].score;
     }
-    
+
     // Serialize the message
     int msg_len = simple_message__get_packed_size(&msg);
     char *msg_buf = malloc(msg_len);
     simple_message__pack(&msg, msg_buf);
 
-
     // Send the serialized data over ZeroMQ
     zmq_send(socket, msg_buf, msg_len, 0);
-    // Free allocated memory
-    free(msg.players);
+
+    // Cleanup
     free(msg_buf);
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        free(msg.players[i]->id);
+        free(msg.players[i]);
+    }
+    free(msg.players);
 
     int receive_n;
     zmq_recv(socket, &receive_n, sizeof(receive_n), 0);
-    printf("Received World %d\n", receive_n);
-    
+
     zmq_close(socket);
     zmq_ctx_destroy(context);
 }
