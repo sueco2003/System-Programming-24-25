@@ -1,6 +1,16 @@
 
 #include "common.h"
 
+/**
+ * Displays the current game state in a terminal window using ncurses.
+ *
+ * Initializes a ZeroMQ context and subscribes to a publisher to receive
+ * game state updates. Sets up ncurses windows to display line numbers,
+ * column numbers, the game board, and player scores. Continuously receives
+ * game state updates and refreshes the display accordingly.
+ *
+ * Cleans up ncurses windows and ZeroMQ resources upon termination.
+ */
 void *display_game_state() {
 
     subscriber = zmq_socket(context, ZMQ_SUB);
@@ -23,23 +33,17 @@ void *display_game_state() {
         mvwprintw(line_win, i, 0, "%d", i % 10);
         mvwprintw(column_win, 0, i, "%d", i % 10);
     }
-    wrefresh(line_win);
-    wrefresh(column_win);
 
+    mvwprintw(score_win, 1, 3, "%s", "SCORE");
     box(board_win, 0, 0);
     box(score_win, 0, 0);
-    mvwprintw(score_win, 1, 3, "%s", "SCORE");
-    wrefresh(score_win);
-    wrefresh(board_win);
+    wrefresh(line_win);
+    wrefresh(column_win);
+    refresh();
 
-    GameState gameState;
-    // memset(&gameState, 0, sizeof(gameState));
-    // memset(&astronaut_ids_in_use, 0, sizeof(astronaut_ids_in_use));
-    
-    char topic[strlen(MSG_UPDATE)];
+    GameState gameState = {0}; 
+    char topic[256];
     while (1) {
-    // memset(&gameState, 0, sizeof(gameState));
-    // memset(&astronaut_ids_in_use, 0, sizeof(astronaut_ids_in_use));
         // Receive game state updates
         zmq_recv(subscriber, topic, sizeof(topic), 0);
         if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
@@ -51,8 +55,8 @@ void *display_game_state() {
         }
 
         else if (strncmp(topic, MSG_UPDATE, strlen(MSG_UPDATE)) != 0) continue;
-        zmq_recv(subscriber, &gameState, sizeof(GameState), 0);
         zmq_recv(subscriber, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+        zmq_recv(subscriber, &gameState, sizeof(GameState), 0);
         
 
         // Update board and score

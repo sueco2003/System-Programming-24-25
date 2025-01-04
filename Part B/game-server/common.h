@@ -7,12 +7,13 @@
 #include <math.h>
 #include <pthread.h>  // for pthread_create, pthread_join
 #include <stdio.h>	  // for sprintf, perror
- 
+#include <stdlib.h>
 #include <string.h>	  // for strlen, strncmp, memset
 #include <string.h>
 #include <time.h>	 // for time, time_t
 #include <unistd.h>	 // for sleep, NULL, fork, usleep, pid_t
 #include <zmq.h>	 // for zmq_send, zmq_close, zmq_ctx_destroy, zmq_socket
+#include "../points.pb-c.h"
 
 #define SERVER_ADDRESS "tcp://127.0.0.1:5533" // VER ESTES IPS O QUE E PARA POR AQUI
 #define PUBLISHER_ADDRESS "tcp://127.0.0.1:5554"

@@ -10,7 +10,8 @@
 
 #define BOARD_SIZE 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 85 // 1/3 of the board
+#define MAX_ALIENS 256
+#define START_ALIENS 85 // 1/3 of the board
 
 #define MSG_UPDATE "Outer_space_update"
 #define MSG_SERVER "Server_terminate"

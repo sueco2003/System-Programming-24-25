@@ -16,6 +16,7 @@ void display_game_state() {
     void *subscriber = zmq_socket(context, ZMQ_SUB);
     zmq_connect(subscriber, PUBLISHER_ADDRESS);
     zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, MSG_UPDATE, strlen(MSG_UPDATE));
+    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, MSG_SERVER, strlen(MSG_SERVER));		
 
     initscr();
     noecho();
@@ -23,8 +24,7 @@ void display_game_state() {
 
     WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);    // Window for line numbers
     WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);  // Window for column numbers
-    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2,
-                               2);  // Window for the board with a border
+    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 2);  // Window for the board with a border
     WINDOW *score_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 25);
 
     for (int i = 0; i < BOARD_SIZE; i++) {
@@ -39,7 +39,6 @@ void display_game_state() {
     wrefresh(column_win);
 
     GameState gameState = {0};
-    memset(astronaut_ids_in_use, 0, sizeof(astronaut_ids_in_use));
     char topic[256];
     while (1) {
         // Receive game state updates
@@ -51,12 +50,7 @@ void display_game_state() {
            continue;
         }
         zmq_recv(subscriber, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
-        int bytes_received = zmq_recv(subscriber, &gameState, sizeof(GameState), 0);
-        if (bytes_received != sizeof(GameState)) {
-            fprintf(stderr, "Error: Expected %lu bytes, received %d bytes\n", sizeof(GameState), bytes_received);
-            continue;
-        }
-
+        zmq_recv(subscriber, &gameState, sizeof(GameState), 0);
 
         wclear(score_win);
         box(score_win, 0, 0);
@@ -73,7 +67,7 @@ void display_game_state() {
                 j++;
             }
         }
-
+        refresh();
         wrefresh(board_win);
         wrefresh(score_win);
     }

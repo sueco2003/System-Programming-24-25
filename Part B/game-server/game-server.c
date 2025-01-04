@@ -1,4 +1,41 @@
 #include "common.h"
+void proto_buffer_send(GameState *gameState) {
+    void *context = zmq_ctx_new();
+    void *socket = zmq_socket(context, ZMQ_REQ);
+    zmq_connect(socket, "tcp://localhost:5559");
+
+    // Initialize the Score protobuf message
+    SimpleMessage msg = SIMPLE_MESSAGE__INIT;  // Initialize the message
+    
+    msg.n_players = MAX_PLAYERS;
+    msg.players = malloc(sizeof(Astronaut) * MAX_PLAYERS);
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+      char id[2] = {gameState->astronauts[i].id, '\0'};
+      strcpy(msg.players[i]->id, id);
+      msg.players[i]->score = gameState->astronauts[i].score;
+    }
+    
+    // Serialize the message
+    int msg_len = simple_message__get_packed_size(&msg);
+    char *msg_buf = malloc(msg_len);
+    simple_message__pack(&msg, msg_buf);
+
+
+    // Send the serialized data over ZeroMQ
+    zmq_send(socket, msg_buf, msg_len, 0);
+    // Free allocated memory
+    free(msg.players);
+    free(msg_buf);
+
+    int receive_n;
+    zmq_recv(socket, &receive_n, sizeof(receive_n), 0);
+    printf("Received World %d\n", receive_n);
+    
+    zmq_close(socket);
+    zmq_ctx_destroy(context);
+}
+
 
 /**
  * Updates the game board in the GameState structure.
@@ -465,14 +502,16 @@ void process_message(void *socket, char *message, GameState *gameState, void *pu
 
         render_board(gameState); // Render the board after the shot is marked
         zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-        zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
-        zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+        zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
+        zmq_send(publisher, gameState, sizeof(GameState), 0);
         usleep(500000);
         break; // Break after processing the zap for the current
                // astronaut
       }
     }
-
+    if (play_score > 0) {
+      proto_buffer_send(gameState);
+    }
     char message[56];
     sprintf(message, "This play: %d points | Current score: %d", play_score,
             gameState->astronauts[player].score);
@@ -511,8 +550,8 @@ void *alien_position_update(void *arg) {
     render_score(gameState);
 
     zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-    zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
-    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
+    zmq_send(publisher, gameState, sizeof(GameState), 0);
 
     pthread_mutex_unlock(&mutex);
     sleep(1);
@@ -560,8 +599,8 @@ void *increase_alien_count(void *arg) {
       render_score(gameState);
 
       zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-      zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
-      zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+      zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
+      zmq_send(publisher, gameState, sizeof(GameState), 0);
     } else {
       time_t waiting = last_alien_shot + 10 - now;
       pthread_mutex_unlock(&mutex); // Unlock mutex while sleeping
@@ -634,8 +673,9 @@ void *server_management(void *arg) {
     pthread_mutex_unlock(&mutex);
 
     zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE);
-    zmq_send(publisher, gameState, sizeof(gameState), ZMQ_SNDMORE);
-    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), 0);
+    zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE);
+    zmq_send(publisher, gameState, sizeof(GameState), 0);
+    
     
 
     if (gameState->alien_count == 0) {

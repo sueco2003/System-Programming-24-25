@@ -1,15 +1,62 @@
 CC = gcc
-LIBS = -lzmq -lncurses -pthread -lm
+CXX = g++
+PROTOC = protoc
+LIBS = -lzmq -lprotobuf-c -lncurses -lpthread -lm 
 
-TARGETS = astronaut-client/astronaut-client astronaut-client-display/astronaut-client-display game-server/game-server outer-space-display/outer-space-display
-SRCS = astronaut-client/astronaut-client.c astronaut-client-display/astronaut-client-display.c game-server/game-server.c outer-space-display/outer-space-display.c
+# Protobuf file name (renamed)
+PROTO_FILES = points.proto
 
-all: $(TARGETS)
+# Protobuf C sources and headers
+PROTO_C_SRCS = $(PROTO_FILES:.proto=.pb-c.c)
+PROTO_C_HDRS = $(PROTO_FILES:.proto=.pb-c.h)
 
-%: %.c
+# Protobuf C++ sources and headers
+PROTO_CPP_SRCS = $(PROTO_FILES:.proto=.pb.cc)
+PROTO_CPP_HDRS = $(PROTO_FILES:.proto=.pb.h)
+
+# Target executables
+TARGETS = astronaut-client/astronaut-client \
+          astronaut-client-display/astronaut-client-display \
+          game-server/game-server \
+          outer-space-display/outer-space-display \
+          space-high-scores/space-high-scores
+
+# Source files for C and C++ files
+SRCS_C = astronaut-client/astronaut-client.c \
+         astronaut-client-display/astronaut-client-display.c \
+         game-server/game-server.c \
+         outer-space-display/outer-space-display.c
+
+SRCS_CPP = space-high-scores/space-high-scores.cpp
+
+# Default target
+all: $(PROTO_C_SRCS) $(PROTO_CPP_SRCS) $(TARGETS)
+
+# Rule to generate C Protobuf files
+%.pb-c.c %.pb-c.h: %.proto
+	$(PROTOC) --c_out=. $<
+
+# Rule to generate C++ Protobuf files
+%.pb.cc %.pb.h: %.proto
+	$(PROTOC) --cpp_out=. $<
+
+# Compile C sources
+astronaut-client/astronaut-client: astronaut-client/astronaut-client.c $(PROTO_C_HDRS)
 	$(CC) $< -g -o $@ $(LIBS)
 
-clean:
-	rm -f $(TARGETS)
+astronaut-client-display/astronaut-client-display: astronaut-client-display/astronaut-client-display.c $(PROTO_C_HDRS)
+	$(CC) $< -g -o $@ $(LIBS)
 
-.PHONY: all clean
+game-server/game-server: game-server/game-server.c $(PROTO_C_HDRS)
+	$(CC) $< -g -o $@ $(LIBS)
+
+outer-space-display/outer-space-display: outer-space-display/outer-space-display.c $(PROTO_C_HDRS)
+	$(CC) $< -g -o $@ $(LIBS)
+
+# Compile C++ sources
+space-high-scores/space-high-scores: space-high-scores/space-high-scores.cpp $(PROTO_CPP_HDRS)
+	$(CXX) $< -g -o $@ $(LIBS)
+
+# Clean rule to remove generated files
+clean:
+	rm -f $(TARGETS) $(PROTO_C_SRCS) $(PROTO)
