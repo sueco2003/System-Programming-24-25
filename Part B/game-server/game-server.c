@@ -1,9 +1,7 @@
 #include "common.h"
 void proto_buffer_send(GameState *gameState) {
-    void *context = zmq_ctx_new();
-    void *socket = zmq_socket(context, ZMQ_REQ);
+    void *socket = zmq_socket(context, ZMQ_PUSH);
     zmq_connect(socket, "tcp://localhost:5559");
-
     // Initialize the Score protobuf message
     SimpleMessage msg = SIMPLE_MESSAGE__INIT;
     msg.n_players = MAX_PLAYERS;
@@ -36,12 +34,7 @@ void proto_buffer_send(GameState *gameState) {
         free(msg.players[i]);
     }
     free(msg.players);
-
-    int receive_n;
-    zmq_recv(socket, &receive_n, sizeof(receive_n), 0);
-
     zmq_close(socket);
-    zmq_ctx_destroy(context);
 }
 
 
@@ -160,21 +153,28 @@ void render_score(GameState *gameState) {
  * @param gameState Pointer to the GameState structure to be initialized.
  */
 void init_game_state(GameState *gameState) {
-  memset(gameState->board, ' ', sizeof(gameState->board));
-  gameState->astronaut_count = 0;
-  gameState->alien_count = START_ALIENS;
+    bool alien_placement[BOARD_SIZE][BOARD_SIZE] = {false};
+    memset(gameState->board, ' ', sizeof(gameState->board));
+    gameState->astronaut_count = 0;
+    gameState->alien_count = START_ALIENS;
 
-  // Initialize aliens
-  for (int i = 0; i < START_ALIENS; i++) {
-    gameState->aliens[i].x =
-        rand() % (BOARD_SIZE - 4) + 2; // Random X position (avoiding borders)
-    gameState->aliens[i].y =
-        rand() % (BOARD_SIZE - 4) + 2; // Random Y position (avoiding borders)
-  }
-  for (int i = 0; i < MAX_PLAYERS; i++)
-    gameState->astronauts[i] = (Astronaut){0};
+    // Initialize aliens
+    for (int i = 0; i < START_ALIENS; i++) {
+        int x, y;
+        do {
+            x = rand() % (BOARD_SIZE - 4) + 2; // Random X position (avoiding borders)
+            y = rand() % (BOARD_SIZE - 4) + 2; // Random Y position (avoiding borders)
+        } while (alien_placement[x][y]); // Repeat if the spot is already taken
+
+        alien_placement[x][y] = true; // Mark the position as occupied
+        gameState->aliens[i].x = x;
+        gameState->aliens[i].y = y;
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        gameState->astronauts[i] = (Astronaut){0};
+    }
 }
-
 /**
  * Removes an alien from the GameState's alien array at the specified index.
  *
@@ -205,28 +205,35 @@ void remove_alien(int index, GameState *gameState) {
  */
 
 void update_aliens(GameState *gameState) {
-  for (int i = 0; i < gameState->alien_count; i++) {
-    // Random movement within the range of 2 to 17
-    int dx = (rand() % 3) - 1; // Random -1, 0, or 1 for X movement
-    int dy = (rand() % 3) - 1; // Random -1, 0, or 1 for Y movement
 
-    // Update alien position while keeping it within the range 2–17
-    gameState->aliens[i].x =
-        (gameState->aliens[i].x + dx + BOARD_SIZE) % BOARD_SIZE;
-    gameState->aliens[i].y =
-        (gameState->aliens[i].y + dy + BOARD_SIZE) % BOARD_SIZE;
+    for (int i = 0; i < gameState->alien_count; i++) {
+        int new_x, new_y;
+        bool valid_move;
 
-    // Ensure aliens are within the restricted area (2–17)
-    if (gameState->aliens[i].x < 2)
-      gameState->aliens[i].x = 2;
-    if (gameState->aliens[i].x > 17)
-      gameState->aliens[i].x = 17;
-    if (gameState->aliens[i].y < 2)
-      gameState->aliens[i].y = 2;
-    if (gameState->aliens[i].y > 17)
-      gameState->aliens[i].y = 17;
-  }
+            // Random movement within the range of -1, 0, 1
+            int dx = (rand() % 3) - 1;
+            int dy = (rand() % 3) - 1;
+
+            // Calculate new position
+            new_x = gameState->aliens[i].x + dx;
+            new_y = gameState->aliens[i].y + dy;
+
+            // Ensure the new position is within the restricted area (2–17)
+            if (new_x < 2) new_x = 2;
+            if (new_x > 17) new_x = 17;
+            if (new_y < 2) new_y = 2;
+            if (new_y > 17) new_y = 17;
+
+
+
+        if (alien_placement[new_x][new_y]) continue; // Skip if the spot is taken
+        alien_placement[gameState->aliens[i].x][gameState->aliens[i].y] = false; // Clear old position
+        gameState->aliens[i].x = new_x;
+        gameState->aliens[i].y = new_y;
+        alien_placement[new_x][new_y] = true; // Mark new position
+    }
 }
+
 
 /**
  * Processes incoming messages and updates the game state accordingly.
@@ -594,13 +601,26 @@ void *increase_alien_count(void *arg) {
     if (now - last_alien_shot > 10) {
       last_alien_shot = now;
 
-      int new_alien_count = (ceil(gameState->alien_count * 1.1 > MAX_ALIENS)) ? MAX_ALIENS : ceil(gameState->alien_count * 1.1);
+      int new_alien_count = (ceil(gameState->alien_count * 1.1) > MAX_ALIENS) 
+                      ? MAX_ALIENS 
+                      : ceil(gameState->alien_count * 1.1);
 
-      for (int i = gameState->alien_count; i < new_alien_count; i++) {
-        gameState->aliens[i].x = rand() % (BOARD_SIZE - 4) + 2; // Random X position (avoiding borders)
-        gameState->aliens[i].y = rand() % (BOARD_SIZE - 4) + 2; // Random Y position (avoiding borders)
-      }
-      gameState->alien_count = new_alien_count;
+// Place new aliens
+for (int i = gameState->alien_count; i < new_alien_count; i++) {
+    int x, y;
+    do {
+        x = rand() % (BOARD_SIZE - 4) + 2; // Random X position (avoiding borders)
+        y = rand() % (BOARD_SIZE - 4) + 2; // Random Y position (avoiding borders)
+    } while (alien_placement[x][y]); // Repeat until an unoccupied spot is found
+
+    gameState->aliens[i].x = x;
+    gameState->aliens[i].y = y;
+    alien_placement[x][y] = true; // Mark the position as occupied
+}
+
+// Update the alien count
+gameState->alien_count = new_alien_count;
+
 
       update_board(gameState);
       render_board(gameState);
@@ -645,6 +665,7 @@ void *signal_handler() {
   zmq_close(publisher);
   zmq_close(socket);
   zmq_ctx_destroy(context);
+  
   endwin();
   free(gameState);
   exit(0);
@@ -690,9 +711,13 @@ void *server_management(void *arg) {
       zmq_send(publisher, MSG_SERVER, strlen(MSG_SERVER), 0);
       mvprintw(0, 0, "Game Over!");
       mvprintw(1, 0, "Scores:");
-      for (int i = 0; i < gameState->astronaut_count; ++i) mvprintw(2 + i, 0, "Player %c: %d", gameState->astronauts[i].id, gameState->astronauts[i].score);
+      for (int i = 0; i < gameState->astronaut_count; i++) {
+        if (astronaut_ids_in_use[i]) {
+        mvprintw(2 + i, 0, "Player %c: %d", gameState->astronauts[i].id, gameState->astronauts[i].score);
+        }
+      }
       refresh();
-      sleep(5);
+      sleep(2);
       break;
     }
   }

@@ -153,7 +153,7 @@ void *run_client() {
         }
     }
 
-    sleep(5);
+    sleep(2);
     endwin();
     zmq_close(socket);
 	zmq_close(subscriber);

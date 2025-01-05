@@ -74,4 +74,5 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 void *context, *publisher, *socket;
 GameState *gameState;
 
+bool alien_placement[BOARD_SIZE][BOARD_SIZE] = {false};
 #endif

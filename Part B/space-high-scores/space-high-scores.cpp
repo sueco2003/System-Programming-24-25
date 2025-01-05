@@ -9,7 +9,7 @@
 int main() {
     // Create the ZeroMQ context and REP socket
     zmq::context_t context(1);
-    zmq::socket_t socket(context, ZMQ_REP);
+    zmq::socket_t socket(context, ZMQ_PULL);
     socket.bind("tcp://*:5559");
 
     while (true) {
@@ -36,11 +36,5 @@ int main() {
             }
             std::cout << "Player ID: " << player.id() << ", Score: " << player.score() << std::endl;
         }
-
-        // Send a response back to the client
-        int response = 1; // Data received successfully
-        zmq::message_t reply(sizeof(response));
-        memcpy(reply.data(), &response, sizeof(response));
-        socket.send(reply, zmq::send_flags::none);
     }
 }
