@@ -1,6 +1,6 @@
-
 #include "common.h"
 
+volatile int quit_flag = 0;  // Global flag to signal quit
 /**
  * Displays the current game state in a terminal window using ncurses.
  *
@@ -23,9 +23,9 @@ void *display_game_state() {
     noecho();
     clear();
 
-    WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);
-    WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);
-    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 2);
+    WINDOW *line_win = newwin(BOARD_SIZE + 2, 1, 3, 1);    // Window for line numbers
+    WINDOW *column_win = newwin(1, BOARD_SIZE + 2, 1, 3);  // Window for column numbers
+    WINDOW *board_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 2);  // Window for the board with a border
     WINDOW *score_win = newwin(BOARD_SIZE + 2, BOARD_SIZE + 2, 2, 25);
 
     // Set up line and column markers
@@ -34,9 +34,6 @@ void *display_game_state() {
         mvwprintw(column_win, 0, i, "%d", i % 10);
     }
 
-    wrefresh(line_win);
-    wrefresh(column_win);
-    
     mvwprintw(score_win, 1, 3, "%s", "SCORE");
     box(board_win, 0, 0);
     box(score_win, 0, 0);
@@ -44,7 +41,8 @@ void *display_game_state() {
 
     GameState gameState = {0}; 
     char topic[256];
-    while (1) {
+    while (!quit_flag) {
+        
         // Receive game state updates
         zmq_recv(subscriber, topic, sizeof(topic), 0);
         if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
@@ -81,11 +79,12 @@ void *display_game_state() {
         refresh();
         wrefresh(board_win);
         wrefresh(score_win);
+        wrefresh(line_win);
+        wrefresh(column_win);
     }
-
+    sleep(2);  // Pause for 2 seconds before closing
     // Cleanup ncurses windows and ZMQ resources
-    delwin(line_win);
-    delwin(column_win);
+   
     delwin(board_win);
     delwin(score_win);
     endwin();
@@ -103,7 +102,6 @@ void *display_game_state() {
  * server responses and handles disconnection gracefully.
  */
 void *run_client() {
-
     initscr();
     keypad(stdscr, TRUE);
     noecho();
@@ -111,9 +109,6 @@ void *run_client() {
     socket = zmq_socket(context, ZMQ_REQ);
     zmq_connect(socket, SERVER_ADDRESS);
 
-    void *publisher = zmq_socket(context, ZMQ_PUB);
-
-    // Connect to the server
     zmq_send(socket, MSG_CONNECT, strlen(MSG_CONNECT), 0);
 
     char response[65];
@@ -122,46 +117,37 @@ void *run_client() {
 
     sscanf(response, "Welcome! You are player %c %s", &astronaut_id, token);
     mvprintw(BOARD_SIZE + 5, 0, "Welcome! You are player %c", astronaut_id);
-	mvprintw(BOARD_SIZE + 6, 0, "- - - - - - - - - - - - - - - - -");
-	refresh();
+    mvprintw(BOARD_SIZE + 6, 0, "- - - - - - - - - - - - - - - - -");
+    refresh();
 
-    while (1) {
+    while (!quit_flag) {
         int ch = getch();
-
-		// Prepare the movement message based on key press
-		char message[38];
-		if (ch == KEY_UP) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'U', token);
-		else if (ch == KEY_DOWN) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'D', token);
-		else if (ch == KEY_LEFT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'L', token);
-		else if (ch == KEY_RIGHT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'R', token);
-		else if (ch == ' ') sprintf(message, "%s %c %s", MSG_ZAP, astronaut_id, token);
-		else if (ch == 'q' || ch == 'Q') sprintf(message, "%s %c %s", MSG_DISCONNECT, astronaut_id, token); 
-		else continue;  // Skip unrecognized keys
+        char message[38];
+        if (ch == KEY_UP) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'U', token);
+        else if (ch == KEY_DOWN) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'D', token);
+        else if (ch == KEY_LEFT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'L', token);
+        else if (ch == KEY_RIGHT) sprintf(message, "%s %c %c %s", MSG_MOVE, astronaut_id, 'R', token);
+        else if (ch == ' ') sprintf(message, "%s %c %s", MSG_ZAP, astronaut_id, token);
+        else if (ch == 'q' || ch == 'Q') {
+            sprintf(message, "%s %c %s", MSG_DISCONNECT, astronaut_id, token);
+            quit_flag = 1;
+        } else continue;
 
         zmq_send(socket, message, strlen(message), 0);
         bytes = zmq_recv(socket, response, sizeof(response), 0);
         response[bytes] = '\0';
 
-		mvprintw(BOARD_SIZE + 7, 0, "%s", response);
-		clrtoeol();
+        mvprintw(BOARD_SIZE + 7, 0, "%s", response);
+        clrtoeol();
         refresh();
-
-        if (strcmp(response, "Disconnected") == 0) { 
-			mvprintw(BOARD_SIZE + 9, 0, "Thanks for playing! See you soon!");
-			refresh();
-            break;
-        }
     }
 
-    sleep(2);
-    endwin();
+    mvprintw(BOARD_SIZE + 9, 0, "Thanks for playing! See you soon!");
+    refresh();
+    sleep(2);  // Pause for 2 seconds before closing
     zmq_close(socket);
-	zmq_close(subscriber);
-	zmq_ctx_destroy(context);
-	exit(0);
     return NULL;
 }
-
 /**
  * Entry point for the client application.
  *
@@ -172,9 +158,7 @@ void *run_client() {
  * @return Returns 0 upon successful completion.
  */
 int main() {
-    
     context = zmq_ctx_new();
-
     pthread_t display_thread_id, client_thread_id;
 
     pthread_create(&client_thread_id, NULL, run_client, NULL);
@@ -183,7 +167,7 @@ int main() {
     pthread_join(client_thread_id, NULL);
     pthread_join(display_thread_id, NULL);
 
+    endwin();  // Cleanup for ncurses
     zmq_ctx_destroy(context);
-
     return 0;
 }
