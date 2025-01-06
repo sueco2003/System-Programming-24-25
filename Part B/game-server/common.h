@@ -73,6 +73,7 @@ time_t last_alien_shot; // Última morte de alienígena
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 void *context, *publisher, *socket;
 GameState *gameState;
+char **validation_tokens;
 
 bool alien_placement[BOARD_SIZE][BOARD_SIZE] = {false};
 #endif

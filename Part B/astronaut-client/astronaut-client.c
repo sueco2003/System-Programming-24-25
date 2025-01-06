@@ -1,27 +1,64 @@
 #include "common.h"
 #include <assert.h>
 
+int quit_flag = 0;
+/**
+ * Listens for messages from a ZeroMQ publisher in a separate thread.
+ *
+ * This function creates a ZeroMQ subscriber socket, connects it to a
+ * specified publisher address, and subscribes to a specific message
+ * topic. It continuously listens for messages, handling errors and
+ * cleaning up resources such as the ZeroMQ socket and context, and
+ * the ncurses environment upon receiving a termination signal.
+ *
+ * @return Always returns NULL after thread exit.
+ */
 void *listen_thread() {
-	subscriber = zmq_socket(context, ZMQ_SUB);
-    int rc = zmq_connect(subscriber, PUBLISHER_ADDRESS);
-	assert(rc == 0);
-    rc = zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, MSG_SERVER, strlen(MSG_SERVER));
-	assert(rc == 0);
+    subscriber = zmq_socket(context, ZMQ_SUB);
+    if (!subscriber) {
+        perror("Failed to create ZeroMQ subscriber socket");
+        return NULL;
+    }
+
+    if (zmq_connect(subscriber, PUBLISHER_ADDRESS) != 0) {
+        perror("Failed to connect ZeroMQ subscriber to publisher");
+        zmq_close(subscriber);
+        return NULL;
+    }
+
+    if (zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, MSG_SERVER, strlen(MSG_SERVER)) != 0) {
+        perror("Failed to set ZeroMQ subscription for MSG_SERVER");
+        zmq_close(subscriber);
+        return NULL;
+    }
 
     while (1) {
         char topic[strlen(MSG_SERVER)];
-        zmq_recv(subscriber, topic, sizeof(topic), 0);
-        if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
-			zmq_close(socket);
-			endwin();
+        if (zmq_recv(subscriber, topic, sizeof(topic), 0) == -1) {
+            perror("Failed to receive topic from ZeroMQ subscriber");
             break;
-        } 
+        }
+
+        if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
+            if (zmq_close(socket) != 0) {
+                perror("Failed to close ZeroMQ socket");
+            }
+
+            endwin(); // Ensure ncurses is cleaned up
+            break;
+        }
     }
-    zmq_close(subscriber);
-	zmq_ctx_destroy(context);
-	exit(0);
-	return NULL;
+
+    if (zmq_close(subscriber) != 0) {
+        perror("Failed to close ZeroMQ subscriber socket");
+    }
+
+    if (zmq_ctx_destroy(context) != 0) {
+        perror("Failed to destroy ZeroMQ context");
+    }
+    return NULL;
 }
+
 
 
 /**
@@ -55,7 +92,7 @@ void *run_client() {
 	mvprintw(2, 0, "- - - - - - - - - - - - - - - - -");	// Display the response
 	refresh();
 
-	while (1) {
+	while (quit_flag == 0) {
 		int ch = getch();
 
 		// Prepare the movement message based on key press
@@ -107,16 +144,41 @@ void *run_client() {
  * @return Returns 0 upon successful completion.
  */
 int main() {
-
     context = zmq_ctx_new();
+    if (!context) {
+        fprintf(stderr, "Error creating ZeroMQ context: %s\n", zmq_strerror(errno));
+        return 1;
+    }
 
     pthread_t client_thread_id, listen_thread_id;
-	pthread_create(&client_thread_id, NULL, run_client, socket);
-    pthread_create(&listen_thread_id, NULL, listen_thread, subscriber);
 
-    pthread_join(client_thread_id, NULL);
-    pthread_join(listen_thread_id, NULL);
+    if (pthread_create(&client_thread_id, NULL, run_client, NULL) != 0) {
+        fprintf(stderr, "Error creating client thread.\n");
+        zmq_ctx_destroy(context);
+        return 1;
+    }
 
-	return 0;
+    if (pthread_create(&listen_thread_id, NULL, listen_thread, NULL) != 0) {
+        fprintf(stderr, "Error creating listener thread.\n");
+        quit_flag = 1;
+		pthread_join(client_thread_id, NULL);
+        zmq_ctx_destroy(context);
+        return 1;
+    }
+
+    if (pthread_join(client_thread_id, NULL) != 0) {
+        perror("Failed to join client thread");
+    }
+
+    if (pthread_join(listen_thread_id, NULL) != 0) {
+        perror("Failed to join listen thread");
+    }
+
+    endwin();  // Cleanup ncurses
+    if (zmq_ctx_destroy(context) != 0) {
+        perror("Failed to destroy ZeroMQ context");
+    }
+
+    return 0;
 }
 
