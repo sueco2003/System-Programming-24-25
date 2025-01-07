@@ -722,8 +722,9 @@ void *server_management(void *arg) {
             sleep(5);
             break;
         }
-
+        pthread_mutex_lock(&mutex);
         process_message(socket, message, gameState, publisher, validation_tokens);
+        pthread_mutex_unlock(&mutex);
 
         if (zmq_send(publisher, MSG_UPDATE, strlen(MSG_UPDATE), ZMQ_SNDMORE) == -1 ||
             zmq_send(publisher, astronaut_ids_in_use, sizeof(astronaut_ids_in_use), ZMQ_SNDMORE) == -1 ||
@@ -737,6 +738,7 @@ void *server_management(void *arg) {
                 perror("Failed to send game over message via publisher");
                 break;
             }
+            on = 0;
             mvprintw(0, 0, "Game Over!");
             mvprintw(1, 0, "Scores:");
             for (int i = 0; i < 8; i++) {
