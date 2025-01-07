@@ -655,7 +655,7 @@ void *increase_alien_count(void *arg) {
  *
  * @return NULL upon completion.
  */
-void *signal_handler() {
+void *signal_handler(void *arg) {
     while (1) {
         int c = getch();
         if (c == 'q' || c == 'Q') {
@@ -668,17 +668,14 @@ void *signal_handler() {
             continue;
         }
     }
-
     // Cleanup resources
     zmq_close(publisher);
     zmq_close(socket);
-    zmq_ctx_destroy(context);
-
-    endwin();
     free(gameState);
     for (int i = 0; i < 8; i++) free(validation_tokens[i]);
     free(validation_tokens);
 
+    endwin();
     return NULL;
 }
 
@@ -709,6 +706,7 @@ void *server_management(void *arg) {
     while (1) {
         memset(message, 0, sizeof(message));
         if (zmq_recv(socket, message, sizeof(message), 0) == -1) {
+            endwin();
             return NULL;
         }
 
@@ -739,6 +737,8 @@ void *server_management(void *arg) {
                 break;
             }
             on = 0;
+            endwin();
+            initscr();
             mvprintw(0, 0, "Game Over!");
             mvprintw(1, 0, "Scores:");
             for (int i = 0; i < 8; i++) {
@@ -755,11 +755,11 @@ void *server_management(void *arg) {
     // Cleanup
     for (int i = 0; i < 8; i++) free(validation_tokens[i]);
     free(validation_tokens);
-
     zmq_close(socket);
     zmq_close(publisher);
-    endwin();
     free(gameState);
+    endwin();
+    exit(0);
 
     return NULL;
 }
@@ -850,17 +850,17 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    // Join threads
+    // Join threads 
     pthread_join(server_thread_id, NULL);
+    printf("Server thread joined\n");
     pthread_join(update_thread_id, NULL);
+    printf("Update thread joined\n");
     pthread_join(increase_thread_id, NULL);
+    printf("Increase thread joined\n");
     pthread_join(terminate_thread_id, NULL);
+    printf("Terminate thread joined\n");
 
-    // Clean up resources
-    free(gameState);
-    zmq_close(publisher);
-    zmq_close(socket);
     zmq_ctx_destroy(context);
-
+    
     return EXIT_SUCCESS;
 }

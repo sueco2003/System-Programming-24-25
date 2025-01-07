@@ -56,6 +56,7 @@ void *listen_thread() {
     if (zmq_ctx_destroy(context) != 0) {
         perror("Failed to destroy ZeroMQ context");
     }
+    exit(0);
     return NULL;
 }
 
