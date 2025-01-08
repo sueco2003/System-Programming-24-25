@@ -71,7 +71,7 @@ int on = 1;  // Flag para manter o loop do cliente ativo
 time_t last_alien_shot; // Última morte de alienígena
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-void *context, *publisher, *socket;
+void *context, *publisher, *socket, *pusher;
 GameState *gameState;
 char **validation_tokens;
 

@@ -1,7 +1,7 @@
 #include "common.h"
 void proto_buffer_send(GameState *gameState) {
-    void *socket = zmq_socket(context, ZMQ_PUSH);
-    zmq_connect(socket, "tcp://localhost:5559");
+
+    zmq_connect(pusher, PULL_ADDRESS);
     // Initialize the Score protobuf message
     SimpleMessage msg = SIMPLE_MESSAGE__INIT;
     msg.n_players = MAX_PLAYERS;
@@ -25,7 +25,7 @@ void proto_buffer_send(GameState *gameState) {
     simple_message__pack(&msg, msg_buf);
 
     // Send the serialized data over ZeroMQ
-    zmq_send(socket, msg_buf, msg_len, 0);
+    zmq_send(publisher, msg_buf, msg_len, 0);
 
     // Cleanup
     free(msg_buf);
@@ -34,7 +34,6 @@ void proto_buffer_send(GameState *gameState) {
         free(msg.players[i]);
     }
     free(msg.players);
-    zmq_close(socket);
 }
 
 
@@ -669,13 +668,17 @@ void *signal_handler(void *arg) {
         }
     }
     // Cleanup resources
-    zmq_close(publisher);
-    zmq_close(socket);
     free(gameState);
     for (int i = 0; i < 8; i++) free(validation_tokens[i]);
     free(validation_tokens);
 
     endwin();
+    zmq_close(socket);
+    zmq_close(publisher);
+    zmq_close(pusher);
+    zmq_ctx_destroy(context);
+
+    printf("Server terminated\n");
     return NULL;
 }
 
@@ -819,6 +822,15 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    pusher = zmq_socket(context, ZMQ_PUSH);
+    if (!pusher) {
+        perror("Failed to create ZMQ PUB socket");
+        zmq_close(socket);
+        zmq_close(publisher);
+        zmq_ctx_destroy(context);
+        return EXIT_FAILURE;
+    }
+
     // Allocate and initialize game state
     GameState *gameState = malloc(sizeof(GameState));
     if (!gameState) {
@@ -860,7 +872,7 @@ int main() {
     pthread_join(terminate_thread_id, NULL);
     printf("Terminate thread joined\n");
 
-    zmq_ctx_destroy(context);
+    
     
     return EXIT_SUCCESS;
 }
