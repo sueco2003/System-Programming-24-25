@@ -15,16 +15,16 @@
 #include <zmq.h>	 // for zmq_send, zmq_close, zmq_ctx_destroy, zmq_socket
 #include "../points.pb-c.h"
 
-#define SERVER_ADDRESS "tcp://127.0.0.1:5533" // VER ESTES IPS O QUE E PARA POR AQUI
+#define SERVER_ADDRESS "tcp://127.0.0.1:5533"
 #define PUBLISHER_ADDRESS "tcp://127.0.0.1:5554"
 
-#define PULL_ADDRESS "tcp://127.0.0.1:5553" // VER ESTES IPS O QUE E PARA POR AQUI
+#define PULL_ADDRESS "tcp://127.0.0.1:5559" 
 #define PUSH_ADDRESS "tcp://127.0.0.1:5564"
 
 #define BOARD_SIZE 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 5 //256
-#define START_ALIENS 5 //85 // 1/3 of the board
+#define MAX_ALIENS 256 //256
+#define START_ALIENS 85 //85 // 1/3 of the board
 
 // Message types
 #define MSG_CONNECT "Astronaut_connect"
@@ -70,7 +70,7 @@ int on = 1;  // Flag para manter o loop do cliente ativo
 
 time_t last_alien_shot; // Última morte de alienígena
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex;
 void *context, *publisher, *socket, *pusher;
 GameState *gameState;
 char **validation_tokens;

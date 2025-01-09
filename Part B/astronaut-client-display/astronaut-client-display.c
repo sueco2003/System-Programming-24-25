@@ -1,6 +1,6 @@
 #include "common.h"
 
-volatile int quit_flag = 0;  // Global flag to signal quit
+int quit_flag = 0;  // Global flag to signal quit
 /**
  * Displays the current game state in a terminal window using ncurses.
  *
@@ -97,9 +97,9 @@ void *display_game_state() {
     char topic[256];
     while (!quit_flag) {
         if (zmq_recv(subscriber, topic, sizeof(topic), 0) == -1) {
-            perror("Failed to receive topic");
             break;
         }
+
         if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
             zmq_close(socket);
             endwin();
@@ -148,8 +148,9 @@ void *display_game_state() {
     sleep(2);
     delwin(board_win);
     delwin(score_win);
+    delwin(line_win);
+    delwin(column_win);
     endwin();
-    zmq_close(subscriber);
     return NULL;
 }
 
@@ -250,7 +251,12 @@ void *run_client() {
     if (zmq_close(socket) != 0) {
         perror("Failed to close ZeroMQ socket");
     }
-
+    if (zmq_close(subscriber) != 0) {
+        perror("Failed to close ZeroMQ socket");
+    }
+    if (zmq_ctx_destroy(context) != 0) {
+        perror("Failed to destroy context");
+    }
     endwin();
     return NULL;
 }
@@ -295,10 +301,6 @@ int main() {
     }
 
     endwin();  // Cleanup ncurses
-    if (zmq_ctx_destroy(context) != 0) {
-        perror("Failed to destroy ZeroMQ context");
-    }
-
     return 0;
 }
 

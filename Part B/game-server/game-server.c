@@ -1,7 +1,19 @@
 #include "common.h"
+
+/**
+ * Sends the current game state using a protobuf message over ZeroMQ.
+ *
+ * This function connects to a ZeroMQ socket and initializes a protobuf
+ * message to encapsulate the scores and IDs of all players in the game.
+ * It serializes the message and sends it through the ZeroMQ publisher
+ * socket. Memory allocated for the message and player data is freed
+ * after sending.
+ *
+ * @param gameState Pointer to the GameState structure containing the
+ *                  current scores and IDs of the astronauts.
+ */
 void proto_buffer_send(GameState *gameState) {
 
-    zmq_connect(pusher, PULL_ADDRESS);
     // Initialize the Score protobuf message
     SimpleMessage msg = SIMPLE_MESSAGE__INIT;
     msg.n_players = MAX_PLAYERS;
@@ -25,6 +37,9 @@ void proto_buffer_send(GameState *gameState) {
     simple_message__pack(&msg, msg_buf);
 
     // Send the serialized data over ZeroMQ
+    // Send the serialized data with a topic
+    const char *topic = "MSG_SCORES"; // Topic for the message
+    zmq_send(publisher, topic, strlen(topic), ZMQ_SNDMORE);
     zmq_send(publisher, msg_buf, msg_len, 0);
 
     // Cleanup
@@ -186,6 +201,7 @@ void init_game_state(GameState *gameState) {
  *                  is to be removed.
  */
 void remove_alien(int index, GameState *gameState) {
+  alien_placement[gameState->aliens[index].x][gameState->aliens[index].y] = false;
   for (int i = index; i < gameState->alien_count - 1; i++)
     gameState->aliens[i] = gameState->aliens[i + 1];
   gameState->alien_count--;
@@ -603,7 +619,6 @@ void *increase_alien_count(void *arg) {
             int new_alien_count = (ceil(gameState->alien_count * 1.1) > MAX_ALIENS)
                                       ? MAX_ALIENS
                                       : ceil(gameState->alien_count * 1.1);
-
             // Place new aliens
             for (int i = gameState->alien_count; i < new_alien_count; i++) {
                 int x, y;
@@ -677,8 +692,6 @@ void *signal_handler(void *arg) {
     zmq_close(publisher);
     zmq_close(pusher);
     zmq_ctx_destroy(context);
-
-    printf("Server terminated\n");
     return NULL;
 }
 
@@ -760,8 +773,10 @@ void *server_management(void *arg) {
     free(validation_tokens);
     zmq_close(socket);
     zmq_close(publisher);
+    zmq_close(pusher);
     free(gameState);
     endwin();
+    zmq_ctx_destroy(context);
     exit(0);
 
     return NULL;
@@ -784,7 +799,7 @@ void *server_management(void *arg) {
 
 int main() {
     srand(time(NULL));
-
+    pthread_mutex_init(&mutex, NULL);
     // Initialize ZMQ context
     context = zmq_ctx_new();
     if (!context) {
@@ -864,15 +879,11 @@ int main() {
 
     // Join threads 
     pthread_join(server_thread_id, NULL);
-    printf("Server thread joined\n");
     pthread_join(update_thread_id, NULL);
-    printf("Update thread joined\n");
     pthread_join(increase_thread_id, NULL);
-    printf("Increase thread joined\n");
     pthread_join(terminate_thread_id, NULL);
-    printf("Terminate thread joined\n");
 
-    
+    pthread_mutex_destroy(&mutex);
     
     return EXIT_SUCCESS;
 }

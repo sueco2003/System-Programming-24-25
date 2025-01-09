@@ -6,17 +6,35 @@
 #include "../points.pb.h"
 #include "stdlib.h"
 
-#define PULL_ADDRESS "tcp://127.0.0.1:5553"
-#define PUSH_ADDRESS "tcp://127.0.0.1:5564"
+#define PUBLISHER_ADDRESS "tcp://127.0.0.1:5554"
+#define MSG_SERVER "Server_terminate"
 
 int main() {
-    // Create the ZeroMQ context and REP socket
     zmq::context_t context(1);
-    zmq::socket_t socket(context, ZMQ_PULL);
-    socket.connect(PULL_ADDRESS);
+    zmq::socket_t socket(context, ZMQ_SUB);
+    socket.connect(PUBLISHER_ADDRESS);
+
+    // Subscribe to the "highscores" topic
+    socket.set(zmq::sockopt::subscribe, MSG_SERVER);
+    socket.set(zmq::sockopt::subscribe, "MSG_SCORES");
+    
+
 
     while (true) {
-        // Receive the message from the client
+        // Receive the topic
+        zmq::message_t topic_msg;
+        auto topic_recv_result = socket.recv(topic_msg, zmq::recv_flags::none);
+        if (!topic_recv_result) {
+            std::cerr << "Failed to receive topic." << std::endl;
+            continue;
+        }
+
+        std::string topic(static_cast<char *>(topic_msg.data()), topic_msg.size());
+        if (topic == MSG_SERVER) {
+            break;
+        }
+
+        // Receive the message
         zmq::message_t request;
         auto recv_result = socket.recv(request, zmq::recv_flags::none);
         if (!recv_result) {
@@ -30,14 +48,20 @@ int main() {
             std::cerr << "Failed to parse message." << std::endl;
             continue;
         }
+
         std::cout << "\033[2J\033[H";
         std::cout << "High Scores:" << std::endl;
-        for (int i = 0; i < 8; i++) {
-            const Player& player = msg.players(i);
+        for (int i = 0; i < msg.players_size(); i++) {
+            const Player &player = msg.players(i);
             if (player.id().empty()) {
                 continue;
             }
             std::cout << "Player ID: " << player.id() << ", Score: " << player.score() << std::endl;
         }
     }
+
+    socket.close();
+    context.close();
+
+    return 0;
 }

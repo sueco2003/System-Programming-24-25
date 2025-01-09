@@ -35,28 +35,19 @@ void *listen_thread() {
     while (1) {
         char topic[strlen(MSG_SERVER)];
         if (zmq_recv(subscriber, topic, sizeof(topic), 0) == -1) {
-            perror("Failed to receive topic from ZeroMQ subscriber");
             break;
         }
 
         if (strncmp(topic, MSG_SERVER, strlen(MSG_SERVER)) == 0) {
-            if (zmq_close(socket) != 0) {
-                perror("Failed to close ZeroMQ socket");
-            }
-
+            zmq_close(subscriber);
+            zmq_close(socket);
+            zmq_ctx_destroy(context);
             endwin(); // Ensure ncurses is cleaned up
+            exit(0);
             break;
         }
     }
 
-    if (zmq_close(subscriber) != 0) {
-        perror("Failed to close ZeroMQ subscriber socket");
-    }
-
-    if (zmq_ctx_destroy(context) != 0) {
-        perror("Failed to destroy ZeroMQ context");
-    }
-    exit(0);
     return NULL;
 }
 
@@ -176,10 +167,5 @@ int main() {
     }
 
     endwin();  // Cleanup ncurses
-    if (zmq_ctx_destroy(context) != 0) {
-        perror("Failed to destroy ZeroMQ context");
-    }
-
     return 0;
 }
-
