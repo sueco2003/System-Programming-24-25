@@ -9,6 +9,18 @@
 #define PUBLISHER_ADDRESS "tcp://127.0.0.1:5554"
 #define MSG_SERVER "Server_terminate"
 
+/**
+ * Main function that connects to a ZMQ publisher to receive and display high scores.
+ *
+ * This function sets up a ZMQ subscriber socket to connect to a predefined publisher
+ * address. It subscribes to specific topics related to high scores and continuously
+ * listens for incoming messages. Upon receiving a message, it deserializes the data
+ * using Protocol Buffers and displays the high scores of players. The loop continues
+ * until a specific termination message is received.
+ *
+ * The function handles errors in receiving and parsing messages, ensuring robust
+ * communication with the publisher.
+ */
 int main() {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_SUB);
