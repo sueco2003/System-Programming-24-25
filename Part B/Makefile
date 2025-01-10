@@ -16,14 +16,14 @@ PROTO_CPP_HDRS = $(PROTO_FILES:.proto=.pb.h)
 
 # Target executables
 TARGETS = astronaut-client/astronaut-client \
-          astronaut-client-display/astronaut-client-display \
+          astronaut-display-client/astronaut-display-client \
           game-server/game-server \
           outer-space-display/outer-space-display \
           space-high-scores/space-high-scores
 
 # Source files for C and C++ files
 SRCS_C = astronaut-client/astronaut-client.c \
-         astronaut-client-display/astronaut-client-display.c \
+         astronaut-display-client/astronaut-display-client.c \
          game-server/game-server.c \
          outer-space-display/outer-space-display.c
 
@@ -44,7 +44,7 @@ all: $(PROTO_C_SRCS) $(PROTO_CPP_SRCS) $(TARGETS)
 astronaut-client/astronaut-client: astronaut-client/astronaut-client.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
 	$(CC) $< $(PROTO_C_SRCS) -g -o $@ $(LIBS)
 
-astronaut-client-display/astronaut-client-display: astronaut-client-display/astronaut-client-display.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
+astronaut-display-client/astronaut-display-client: astronaut-display-client/astronaut-display-client.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
 	$(CC) $< $(PROTO_C_SRCS) -g -o $@ $(LIBS)
 
 game-server/game-server: game-server/game-server.c $(PROTO_C_SRCS) $(PROTO_C_HDRS)
