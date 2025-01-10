@@ -695,7 +695,19 @@ void *signal_handler(void *arg) {
     return NULL;
 }
 
-
+/**
+ * Manages the server operations for the game.
+ *
+ * This function runs in a loop, receiving messages from clients,
+ * processing them, and broadcasting updates to all connected clients.
+ * It allocates memory for validation tokens, handles incoming messages,
+ * updates the game state, and sends the updated state to clients using
+ * ZeroMQ sockets. The function also manages the end of the game by
+ * displaying final scores and cleaning up resources.
+ *
+ * @param arg Pointer to the GameState structure to be managed.
+ * @return NULL upon completion.
+ */
 void *server_management(void *arg) {
     GameState *gameState = (GameState *)arg;
 
