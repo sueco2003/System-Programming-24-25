@@ -106,8 +106,6 @@ void display_game_state() {
     mvwprintw(score_win, 1, 3, "%s", "SCORE");
     box(board_win, 0, 0);
     box(score_win, 0, 0);
-    wrefresh(line_win);
-    wrefresh(column_win);
 
     GameState gameState = {0};
     char topic[256];
@@ -156,6 +154,8 @@ void display_game_state() {
         refresh();
         wrefresh(board_win);
         wrefresh(score_win);
+        wrefresh(line_win);
+        wrefresh(column_win);
     }
 
     // Cleanup
